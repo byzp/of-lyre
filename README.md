@@ -16,7 +16,8 @@
 ## 一些有用的工具脚本(位于tools文件夹, 基本都是gpt写的)
 - remove_lower_notes.py 移除所有起始时刻和时值相同的低音键, 保留一个最高音
 - key_map_to_midi.py 将键盘谱(主要是原神的)转换为mid文件
-- 
+- find_most_similar_midi.py 查找与指定mid最相似的mid
+- humanize_midi.py 将mid中同时触发的note错开(of特化方案)
 
 ## 待办
 - 多乐器的同步演奏

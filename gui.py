@@ -13,12 +13,14 @@ from PyQt5.QtCore import Qt, QTimer
 import mido
 from core import midi_to_events, play_events, midi_total_length, stop as core_stop
 import core
-
+import online
 
 class MidiKeyboardGUI(QWidget):
     def __init__(self):
+        global pub_mid
         super().__init__()
         self.setWindowTitle("over field midi player (Windows)")
+        #self.setWindowFlags(Qt.Window)
         self.resize(640, 260)
 
         self.midi = None
@@ -31,6 +33,8 @@ class MidiKeyboardGUI(QWidget):
         self.start_btn = QPushButton("start")
         self.stop_btn = QPushButton("stop")
         self.info_label = QLabel("no MIDI file")
+        self.api_btn = QPushButton("online midi")
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 1000)
         # slider for selecting clip end time (ms)
@@ -51,6 +55,7 @@ class MidiKeyboardGUI(QWidget):
         top_row.addWidget(self.load_btn)
         top_row.addWidget(self.start_btn)
         top_row.addWidget(self.stop_btn)
+        top_row.addWidget(self.api_btn)
 
         mid_row = QHBoxLayout()
         mid_row.addWidget(self.info_label)
@@ -75,6 +80,7 @@ class MidiKeyboardGUI(QWidget):
         self.load_btn.clicked.connect(self.load_midi)
         self.start_btn.clicked.connect(self.start_playback)
         self.stop_btn.clicked.connect(self.stop_playback)
+        self.api_btn.clicked.connect(self.open_midi_browser)
         self.time_slider.valueChanged.connect(self.update_time_label)
         self.start_slider.valueChanged.connect(self.update_time_label)
 
@@ -90,6 +96,11 @@ class MidiKeyboardGUI(QWidget):
 
         # internal progress time (seconds) updated by callback from play_events
         self._current_play_time = 0.0
+    def open_midi_browser(self):
+        # API base url 
+        api_base = "http://139.196.113.128:1200/"
+        dlg = online.midiBrowser(self, api_base)
+        a=dlg.show()
 
     def load_midi(self):
         path, _ = QFileDialog.getOpenFileName(self, "choose MIDI file", "", "MIDI Files (*.mid *.midi)")
@@ -98,7 +109,7 @@ class MidiKeyboardGUI(QWidget):
         try:
             mid = mido.MidiFile(path)
         except Exception as e:
-            self.info_label.setText(f"can not load MIDI: {e}")
+            self.info_label.setText(f"cannot load MIDI: {e}")
             return
         self.midi = mid
         total = midi_total_length(mid)
