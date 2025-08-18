@@ -2,7 +2,7 @@
 mido.MidiFile -> 时间事件列表, MIDI note_on/note_off -> Windows 键盘事件（使用 SendInput，提高同时性与精度）。
 stop flag 控制可被 GUI 的停止按钮触发。
 """
-
+import os
 import time
 import threading
 from typing import List, Tuple, Optional
@@ -32,7 +32,16 @@ def build_note_to_char_map() -> dict:
             mapping[note] = ch
     return mapping
 
-_NOTE_TO_CHAR = build_note_to_char_map()
+if os.path.exists("key.txt"):
+    mapping = {}
+    with open("key.txt", 'r') as f:
+        rows = list(f.read().replace("\n" ,""))
+    notes = [n for n in range(48, 84) if (n % 12) in _WHITE_OFFSETS]
+    for note, ch in zip(notes, rows):
+        mapping[note] = ch
+    _NOTE_TO_CHAR = mapping
+else:
+    _NOTE_TO_CHAR = build_note_to_char_map()
 
 # ---- Windows SendInput wrapper (ctypes) for high-precision simultaneous input ----
 PUL = ctypes.POINTER(ctypes.c_ulong)
