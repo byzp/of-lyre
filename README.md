@@ -31,4 +31,10 @@
 ## 待办
 - 多乐器的同步演奏
 
-## 
+## 界面
+<p align="center">
+<img width="732" height="333" alt="image" src="http://139.196.113.128:1160/img/gui.png" />
+</p>
+<p align="center">
+<img width="728" height="568" alt="image" src="http://139.196.113.128:1160/img/online.png" />
+</p>
