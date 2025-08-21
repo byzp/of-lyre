@@ -18,7 +18,7 @@ class midiBrowser(QDialog):
     songs_loaded = pyqtSignal(dict)          # emits the JSON from /latest_songs
     operation_result = pyqtSignal(bool, str) # (success, message)
 
-    def __init__(self, parent=None, api_base_url="http://127.0.0.1:8000/"):
+    def __init__(self, parent=None, api_base_url="http://127.0.0.1:8000/", gui_object=None):
         super().__init__(parent)
         self.setWindowTitle("Online MIDI Browser")
         #self.setWindowFlags(Qt.Window)
@@ -26,6 +26,7 @@ class midiBrowser(QDialog):
         self.api_base = api_base_url.rstrip("/") + "/"
         self.page = 1
         self.page_size = 20
+        self.gui_obj=gui_object
 
         # Top: search + refresh
         top_layout = QHBoxLayout()
@@ -119,9 +120,11 @@ class midiBrowser(QDialog):
             success = True
             if open_after:
                 QDesktopServices.openUrl(QUrl.fromLocalFile(save_path))
+            return True
         except Exception as e:
             success = False
             msg = f"Download failed: {e}"
+            return False
         self.operation_result.emit(success, msg)
 
     def _worker_delete(self, hash_val, password):
@@ -247,16 +250,16 @@ class midiBrowser(QDialog):
             lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             row_layout.addWidget(lbl)
 
-            #open_btn = QPushButton("Open")
+            load_btn = QPushButton("Load")
             dl_btn = QPushButton("Download")
             del_btn = QPushButton("Delete")
 
             # wire up callbacks with lambdas capturing hash_val and name
-            #open_btn.clicked.connect(lambda checked, h=hash_val, n=name: self.open_item(h, n))
+            load_btn.clicked.connect(lambda checked, h=hash_val, n=name: self.load_item(h, n))
             dl_btn.clicked.connect(lambda checked, h=hash_val, n=name: self.download_item(h, n))
             del_btn.clicked.connect(lambda checked, h=hash_val, n=name: self.delete_item(h, n))
 
-            #row_layout.addWidget(open_btn)
+            row_layout.addWidget(load_btn)
             row_layout.addWidget(dl_btn)
             row_layout.addWidget(del_btn)
             row.setLayout(row_layout)
@@ -277,12 +280,15 @@ class midiBrowser(QDialog):
             return
         threading.Thread(target=self._worker_download, args=(hash_val, save_path, False), daemon=True).start()
 
-    def open_item(self, hash_val, name):
-        # download to tmp and open
+    def load_item(self, hash_val, name):
+        # download to tmp and load
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mid")
         os.close(tmp_fd)
-        # start worker to download and open
-        threading.Thread(target=self._worker_download, args=(hash_val, tmp_path, True), daemon=True).start()
+        # start worker to download and load
+        # if not success -> _worker_download() -> _on_operation_result()
+        if self._worker_download(hash_val, tmp_path):
+            self.gui_obj.load_midi(tmp_path)
+        
 
     def delete_item(self, hash_val, name):
         # ask password

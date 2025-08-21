@@ -15,6 +15,9 @@ from core import midi_to_events, play_events, midi_total_length, stop as core_st
 import core
 import online
 
+# allows "online" load files into "gui"
+w = None
+
 class MidiKeyboardGUI(QWidget):
     def __init__(self):
         global pub_mid
@@ -77,7 +80,7 @@ class MidiKeyboardGUI(QWidget):
         self.setLayout(main)
 
         # Connections
-        self.load_btn.clicked.connect(self.load_midi)
+        self.load_btn.clicked.connect(self.select_file)
         self.start_btn.clicked.connect(self.start_playback)
         self.stop_btn.clicked.connect(self.stop_playback)
         self.api_btn.clicked.connect(self.open_midi_browser)
@@ -96,16 +99,20 @@ class MidiKeyboardGUI(QWidget):
 
         # internal progress time (seconds) updated by callback from play_events
         self._current_play_time = 0.0
+    
     def open_midi_browser(self):
         # API base url 
         api_base = "http://139.196.113.128:1200/"
-        dlg = online.midiBrowser(self, api_base)
+        dlg = online.midiBrowser(self, api_base, w)
         a=dlg.show()
 
-    def load_midi(self):
-        path, _ = QFileDialog.getOpenFileName(self, "choose MIDI file", "", "MIDI Files (*.mid *.midi)")
+    def select_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Select MIDI file", "", "MIDI Files (*.mid *.midi)")
         if not path:
             return
+        self.load_midi(path)
+    
+    def load_midi(self,path):
         try:
             mid = mido.MidiFile(path)
         except Exception as e:
@@ -299,13 +306,8 @@ class MidiKeyboardGUI(QWidget):
         percent = min(1.0, (self._current_play_time * 1000.0) / clip_ms)
         self.progress_bar.setValue(int(percent * 1000))
 
-
-def main():
+if __name__ == "__main__":
     app = QApplication(sys.argv)
     w = MidiKeyboardGUI()
     w.show()
     sys.exit(app.exec_())
-
-
-if __name__ == "__main__":
-    main()
