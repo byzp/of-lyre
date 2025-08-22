@@ -103,8 +103,8 @@ class MidiKeyboardGUI(QWidget):
     def open_midi_browser(self):
         # API base url 
         api_base = "http://139.196.113.128:1200/"
-        dlg = online.midiBrowser(self, api_base, w)
-        a=dlg.show()
+        self.online_dlg = online.midiBrowser(api_base, w)
+        a=self.online_dlg.show()
 
     def select_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "Select MIDI file", "", "MIDI Files (*.mid *.midi)")

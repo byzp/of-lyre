@@ -18,8 +18,8 @@ class midiBrowser(QDialog):
     songs_loaded = pyqtSignal(dict)          # emits the JSON from /latest_songs
     operation_result = pyqtSignal(bool, str) # (success, message)
 
-    def __init__(self, parent=None, api_base_url="http://127.0.0.1:8000/", gui_object=None):
-        super().__init__(parent)
+    def __init__(self, api_base_url="http://127.0.0.1:8000/", gui_object=None):
+        super().__init__()
         self.setWindowTitle("Online MIDI Browser")
         #self.setWindowFlags(Qt.Window)
         self.resize(700, 500)
