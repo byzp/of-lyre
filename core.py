@@ -152,11 +152,16 @@ def release_keys_simultaneous(chars: List[str]):
 # Convert MidiFile -> list of events with absolute time (seconds)
 # Each event: (abs_time_seconds, type_str, note, velocity)
 # type_str: 'on' or 'off'
-def midi_to_events(mid: MidiFile, max_time: Optional[float]=None) -> List[Tuple[float, str, int, int]]:
+
+def midi_to_events(
+    mid: MidiFile, 
+    min_time: Optional[float] = None, 
+    max_time: Optional[float] = None
+) -> List[Tuple[float, str, int, int]]:
     events = []
     ticks_per_beat = mid.ticks_per_beat
     current_tempo = 500000  # default 120 BPM in microseconds per beat
-    # Use merge_tracks to get a single stream of messages with delta times in ticks
+    # merge all tracks into one stream
     merged = mido.merge_tracks(mid.tracks)
     abs_time = 0.0
     for msg in merged:
@@ -164,32 +169,30 @@ def midi_to_events(mid: MidiFile, max_time: Optional[float]=None) -> List[Tuple[
         if msg.time:
             dt = tick2second(msg.time, ticks_per_beat, current_tempo)
             abs_time += dt
-        # handle tempo changes
+        # tempo changes
         if msg.type == 'set_tempo':
             current_tempo = msg.tempo
             continue
+        if min_time is not None and abs_time < min_time:
+            continue
         if msg.type == 'note_on':
-            if msg.note < 48 or msg.note > 83:
-                # outside our mapping range: ignore
-                continue
-            if msg.velocity == 0:
-                # treat as note_off
-                events.append((abs_time, 'off', msg.note, 0))
-            else:
-                events.append((abs_time, 'on', msg.note, msg.velocity))
+            if 48 <= msg.note <= 83:
+                if msg.velocity == 0:
+                    events.append((abs_time, 'off', msg.note, 0))
+                else:
+                    events.append((abs_time, 'on', msg.note, msg.velocity))
         elif msg.type == 'note_off':
-            if msg.note < 48 or msg.note > 83:
-                continue
-            events.append((abs_time, 'off', msg.note, msg.velocity))
-        # optional: stop early if beyond max_time
+            if 48 <= msg.note <= 83:
+                events.append((abs_time, 'off', msg.note, msg.velocity))
         if max_time is not None and abs_time > max_time:
             break
-    # If max_time specified, trim events beyond it
+    if min_time is not None:
+        events = [e for e in events if e[0] >= min_time]
     if max_time is not None:
         events = [e for e in events if e[0] <= max_time]
-    # Ensure sorted by time (should already be in order)
     events.sort(key=lambda x: x[0])
     return events
+
 
 # Play events: send keyboard presses/releases according to event times
 def play_events(events: List[Tuple[float, str, int, int]],

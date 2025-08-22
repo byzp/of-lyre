@@ -176,51 +176,8 @@ class MidiKeyboardGUI(QWidget):
             events = midi_to_events(self.midi, min_time=start_s, max_time=clip_s)
         except TypeError:
             # fallback: get events up to end, then filter/shift locally (best-effort)
-            try:
-                raw_events = midi_to_events(self.midi, max_time=clip_s)
-            except Exception as e:
-                self.info_label.setText(f"failed: {e}")
-                return
-
-            # best-effort generic filter + shift for typical event formats
-            def _filter_and_shift(ev_list, start_t):
-                if not ev_list:
-                    return []
-                # tuple-like (time, ...)
-                try:
-                    first = ev_list[0]
-                    if isinstance(first, (list, tuple)) and isinstance(first[0], (int, float)):
-                        filtered = [(t - start_t, *rest) for (t, *rest) in ev_list if t >= start_t]
-                        return filtered
-                    # dict with 'time'
-                    if isinstance(first, dict) and 'time' in first:
-                        new = []
-                        for e in ev_list:
-                            if e['time'] >= start_t:
-                                ne = e.copy()
-                                ne['time'] = ne['time'] - start_t
-                                new.append(ne)
-                        return new
-                    # objects with .time attribute
-                    if hasattr(first, 'time'):
-                        new = []
-                        for e in ev_list:
-                            if getattr(e, 'time', 0) >= start_t:
-                                # clone might not be necessary, but try to avoid mutating original
-                                try:
-                                    ne = e
-                                    ne.time = ne.time - start_t
-                                    new.append(ne)
-                                except Exception:
-                                    # as fallback, append original
-                                    new.append(e)
-                        return new
-                except Exception:
-                    pass
-                # unknown format: return as-is
-                return ev_list
-
-            events = _filter_and_shift(raw_events, start_s)
+            self.info_label.setText(f"failed: {e}")
+            return
 
         # if still no events
         if not events:
