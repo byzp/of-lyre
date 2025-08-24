@@ -10,7 +10,7 @@ from core import midi_to_events, play_events, midi_total_length, stop as core_st
 def auto_play(pth: str):
     files = os.listdir(pth)
     for fi in files:
-        print(pth,fi)
+        print(pth, fi)
         mid = mido.MidiFile(os.path.join(pth,fi))
         events = midi_to_events(mid, min_time=0, max_time=midi_total_length(mid))
         stop_flag = threading.Event()

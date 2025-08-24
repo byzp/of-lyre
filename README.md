@@ -30,10 +30,13 @@
 - remove_lower_notes.py 移除所有起始时刻和时值相同的低音键, 保留一个最高音
 - key_map_to_midi.py 将键盘谱(主要是原神的)转换为mid文件
 - find_most_similar_midi.py 查找与指定mid最相似的mid
-- humanize_midi.py 将mid中同时触发的note错开(of特化方案)
+- humanize_midi.py 将mid中同时触发的note错开(of特化方案, 已弃用)
+- transpose_midi.py 移调
+- shrink_silences.py 将长静音替换为给定的最大时长
 
 ## 其他脚本(位于scripts文件夹)
 - auto.py 循环演奏文件夹内的所有mid文件, 需要导入core模块, 没有ui
+- auto_online.py 循环演奏在线曲库的所有mid, 需要导入core模块, 没有ui
 
 ## 待办
 - 多乐器的同步演奏
