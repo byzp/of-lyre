@@ -15,6 +15,7 @@ import ctypes.wintypes
 _WHITE_OFFSETS = {0, 2, 4, 5, 7, 9, 11}
 
 # mapping characters for the three rows (each row 7 keys)
+# _ROW0 = list("ZXCVBNM")   # chords 'C', 'Dm', 'Em', 'F', 'G', 'Am', 'G7'
 _ROW1 = list("ASDFGHJ")   # lowest 7 (starting at C3)
 _ROW2 = list("QWERTYU")   # middle 7
 _ROW3 = list("1234567")   # highest 7

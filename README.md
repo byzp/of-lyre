@@ -33,6 +33,7 @@
 - humanize_midi.py 将mid中同时触发的note错开(of特化方案, 已弃用)
 - transpose_midi.py 移调
 - shrink_silences.py 将长静音替换为给定的最大时长
+- process_black_keys.py 将黑键上移或下移一个半音
 
 ## 其他脚本(位于scripts文件夹)
 - auto.py 循环演奏文件夹内的所有mid文件, 需要导入core模块, 没有ui
