@@ -12,7 +12,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 import mido
 from core import midi_to_events, play_events, midi_total_length, stop as core_stop
-import core
 import online
 
 # allows "online" load files into "gui"
@@ -174,9 +173,9 @@ class MidiKeyboardGUI(QWidget):
         events = None
         try:
             events = midi_to_events(self.midi, min_time=start_s, max_time=clip_s)
-        except TypeError:
+        except TypeError as e:
             # fallback: get events up to end, then filter/shift locally (best-effort)
-            self.info_label.setText(f"failed: {e}")
+            self.info_label.setText(f"failed: {str(e)}")
             return
 
         # if still no events

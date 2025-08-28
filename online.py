@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
     QScrollArea, QWidget, QFileDialog, QMessageBox, QInputDialog, QSizePolicy
 )
-from PyQt5.QtCore import pyqtSignal, Qt, QTimer, QUrl
+from PyQt5.QtCore import pyqtSignal, Qt, QUrl
 from PyQt5.QtGui import QDesktopServices
 
 class midiBrowser(QDialog):
@@ -35,6 +35,7 @@ class midiBrowser(QDialog):
         self.search_edit.returnPressed.connect(self.on_search)
         self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.clicked.connect(self.load_latest)
+        self.refresh_btn.setAutoDefault(False)
         top_layout.addWidget(self.search_edit)
         top_layout.addWidget(self.refresh_btn)
 
@@ -111,7 +112,7 @@ class midiBrowser(QDialog):
             url = urljoin(self.api_base, "download")
             with requests.get(url, params={"hash": hash_val}, stream=True, timeout=5) as r:
                 r.raise_for_status()
-                total = r.headers.get("Content-Length")
+                # total = r.headers.get("Content-Length")
                 with open(save_path, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):
                         if chunk:
@@ -124,8 +125,8 @@ class midiBrowser(QDialog):
         except Exception as e:
             success = False
             msg = f"Download failed: {e}"
+            self.operation_result.emit(success, msg)
             return False
-        self.operation_result.emit(success, msg)
 
     def _worker_delete(self, hash_val, password):
         try:
