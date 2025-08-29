@@ -5,11 +5,8 @@ import sys
 BLACK_KEYS = {1, 3, 6, 8, 10}
 
 def process_midi(input_file, output_file, mode="up"):
-    """
-    mode: "up", "down", or "remove"
-    """
     mid = mido.MidiFile(input_file)
-    new_mid = mido.MidiFile(type=mid.type)
+    new_mid = mido.MidiFile(type=mid.type, ticks_per_beat=mid.ticks_per_beat)
 
     for track in mid.tracks:
         new_track = mido.MidiTrack()
@@ -21,12 +18,14 @@ def process_midi(input_file, output_file, mode="up"):
                     elif mode == "down" and msg.note > 0:
                         msg = msg.copy(note=msg.note - 1)
                     elif mode == "remove":
-                        continue  # 跳过此音符
+                        continue
+            # 保证包括 MetaMessage 在内的所有事件都写回
             new_track.append(msg)
         new_mid.tracks.append(new_track)
 
     new_mid.save(output_file)
     print(f"处理完成，结果已保存至 {output_file}")
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
