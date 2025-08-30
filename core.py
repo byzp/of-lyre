@@ -243,7 +243,8 @@ def play_events(events: List[Tuple[float, str, int, int]],
     groups.append((cur_t, cur_group))
 
     # base time zero
-    base_time_zero = groups[0][0]  # usually 0
+    # base_time_zero = groups[0][0]  # usually 0
+    base_time_zero = 0 # Ensure ensemble synchronization
     start_wall = time.perf_counter()
 
     last_progress_time = start_wall
