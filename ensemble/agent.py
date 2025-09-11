@@ -23,7 +23,7 @@ stop_flag = threading.Event()
 def play():
     data = request.get_json(force=True)
     hash_ = data.get('hash')
-    tracks = data.get('tracks', [])  # list of indices
+    tracks = data.get('tracks', [])  # list of indices (could be strings or ints)
     start_at = float(data.get('start_at', time.time()))
     base_url = data.get('base_url')
 
@@ -39,48 +39,74 @@ def play():
     except Exception as e:
         return jsonify({'error': f'download failed: {e}'}), 500
 
-    # Filter tracks: remove tracks that are not selected AND contain note events
+    # Filter tracks: remove notes from tracks that are not selected, operate in-place on midi
     try:
         if not tracks:
             # nothing to play
             return jsonify({'status': 'no tracks assigned'}), 200
 
-        # Sanitize and clamp track indices
+        # Sanitize and clamp track indices (allow strings that represent ints)
         selected_indices = []
         for idx in tracks:
-            if 0 <= idx < len(midi.tracks):
-                selected_indices.append(idx)
+            try:
+                ii = int(idx)
+            except Exception:
+                continue
+            if 0 <= ii < len(midi.tracks):
+                selected_indices.append(ii)
         if not selected_indices:
             return jsonify({'status': 'no valid tracks'}), 200
 
-        # Create a list of tracks to keep: selected tracks and tracks with global meta events (like tempo)
-        tracks_to_keep = []
-        global_events_track = None
-
-        # First, identify all global meta events (tempo, time signature, etc.) from all tracks
-        global_events = []
+        # For each track in the original midi, if it's NOT selected then remove note messages
+        # while preserving meta messages (tempo, time_signature, key_signature, end_of_track, etc.)
         for i, track in enumerate(midi.tracks):
+            # If track is selected, leave it as-is.
+            if i in selected_indices:
+                continue
+
+            # Build filtered message list with correct delta-time handling.
+            new_msgs = []
+            time_acc = 0.0
             for msg in track:
-                if msg.is_meta and msg.type in ['set_tempo', 'time_signature', 'key_signature']:
-                    global_events.append(msg)
+                # accumulate time
+                time_acc += getattr(msg, 'time', 0.0)
 
-        # Create a new track for global events if any are found
-        if global_events:
-            global_events_track = mido.MidiTrack()
-            for msg in global_events:
-                global_events_track.append(msg)
-            tracks_to_keep.append(global_events_track)
+                # Decide whether to keep this message.
+                # Keep if it's meta or not a note_on/note_off.
+                # (note_on with velocity==0 still has type 'note_on' and will be removed here)
+                if msg.is_meta or msg.type not in ('note_on', 'note_off'):
+                    # Mutate the message's time to the accumulated delta and append.
+                    msg.time = time_acc
+                    new_msgs.append(msg)
+                    time_acc = 0.0
+                else:
+                    # This is a note event in an unselected track -> drop it (do not append),
+                    # but keep its delta-time accumulated into the next kept message.
+                    # (so just continue, time_acc remains)
+                    continue
 
-        # Add the selected tracks
-        for idx in selected_indices:
-            tracks_to_keep.append(midi.tracks[idx])
+            # If there is leftover accumulated time (e.g., trailing note events removed),
+            # attach it to the last message if exists, otherwise create an end_of_track meta with that time.
+            if time_acc:
+                if new_msgs:
+                    # add leftover delta to last message's time
+                    new_msgs[-1].time = getattr(new_msgs[-1], 'time', 0.0) + time_acc
+                else:
+                    # no messages kept in this track — ensure there's an end_of_track meta
+                    new_msgs.append(mido.MetaMessage('end_of_track', time=time_acc))
+                    time_acc = 0.0
 
-        # Replace the original tracks with the filtered list
-        midi.tracks.clear()
-        for track in tracks_to_keep:
-            midi.tracks.append(track)
+            # Ensure track ends with an end_of_track meta (many MIDIs already have it, but be safe)
+            if not (new_msgs and getattr(new_msgs[-1], 'is_meta', False) and getattr(new_msgs[-1], 'type', '') == 'end_of_track'):
+                # append end_of_track with time 0
+                new_msgs.append(mido.MetaMessage('end_of_track', time=0))
 
-        # Prepare events
+            # Replace messages in-place on the original track (do not create a new MidiTrack)
+            track.clear()
+            for m in new_msgs:
+                track.append(m)
+
+        # After in-place filtering, prepare events from the same midi object
         total_len = midi_total_length(midi)
         events = midi_to_events(midi, min_time=0, max_time=total_len)
     except Exception as e:
@@ -102,6 +128,7 @@ def play():
     thread.start()
 
     return jsonify({'status': 'scheduled', 'start_at': start_at}), 200
+
 
 @app.route('/cnt', methods=['POST'])
 def cnt():

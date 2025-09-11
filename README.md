@@ -18,15 +18,21 @@
 - 在线曲库界面一个谱子的三个按钮的作用是: 加载谱子, 下载谱子到指定位置, 删除谱子. 搜索框右边的按钮用于清除搜索, 需要搜索请输入名称并按下回车. 右下角可以上传midi谱, 上传需要输入上传者名称和密码, 随便输即可, 删除midi文件时仅验证密码
 
 
-## 使用方法(合奏, 无ui, controller.py, agent.py)
+## 使用方法(合奏(仅支持21键乐器), 无ui, controller.py, agent.py)
 - 在受控机上运行agent.py, 配置好可访问的端口, 将游戏置于窗口焦点
-- 运行controller.py, 传入在线曲库地址和受控机暴露的api地址, 输入hash后三秒演奏开始, 输入"s"停止
+- 运行controller.py, 传入在线曲库地址和受控机暴露的api地址, 输入hash后三秒演奏开始, 输入"s"停止受控端并暂停演奏队列, 输入p继续
 ```
 # 获取歌曲和对应hash
 curl http://139.196.113.128:1200/latest_songs?page=1
+# 启动被控程序
+python controller.py --port 5000
 # 启动主控程序
 python controller.py --base-url http://139.196.113.128:1200 --agents http://192.168.0.113:5000 http://192.168.0.110:5000
 ```
+- 含有note事件的轨道数量大于等于2时会自动拆分, 按顺序分配到所有可用的受控端, 目标轨道数超过受控端数量时剩余轨道会被分配到最后一个受控端
+- 含有note事件的轨道数量等于1时, 目标轨道会被分配到最后一个受控端
+- 对于overfield, 最后一个受控端建议控制电子琴
+- 将controller.py内的auto变量设为True即可自动循环演奏
 
 ## 注意事项
 - 应该不会封号, 但不提供任何保证, 使用风险自负
@@ -45,6 +51,8 @@ python controller.py --base-url http://139.196.113.128:1200 --agents http://192.
 - transpose_midi.py 移调
 - shrink_silences.py 将长静音替换为给定的最大时长
 - process_black_keys.py 将黑键上移或下移一个半音
+- estimate_pitches.py 输入音频, 判断音高
+- split_deleted_notes.py 输入两个mid, 将不同时存在的note作为新轨道, 与旧轨道合并为新输出
 
 ## 其他脚本(位于scripts文件夹)
 - auto.py 循环演奏文件夹内的所有mid文件, 需要导入core模块, 没有ui
