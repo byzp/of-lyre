@@ -37,6 +37,7 @@ python controller.py --base-url http://139.196.113.128:1200 --agents http://192.
 ## 注意事项
 - 应该不会封号, 但不提供任何保证, 使用风险自负
 - 仅适用于windows
+- 有些乐器的音域是c4-b6, 但程序控制时一律视为c3-b5, 使用的mid也必须满足此要求
 - 如果游戏本体以管理员身份运行(被管理员进程拉起的也算, 比如通过taptap启动的), 则此脚本也需以管理员身份运行
 - 成功的操作没有明显的提示, 点着看起来没反应是正常的, 但某处文字会被更改, 主要是主界面顶层按钮的下一行文字
 - 由于大家使用的字符编码不同, 汉字可能出现乱码, 因此界面使用英语(在线曲库可能还是会乱码, 稍后解决)
@@ -53,6 +54,8 @@ python controller.py --base-url http://139.196.113.128:1200 --agents http://192.
 - process_black_keys.py 将黑键上移或下移一个半音
 - estimate_pitches.py 输入音频, 判断音高
 - split_deleted_notes.py 输入两个mid, 将不同时存在的note作为新轨道, 与旧轨道合并为新输出
+- batch_midi_transpose.py 自动移调, 根据c3-b5的白键率, 低于c3的键的比例, 高于b5的键的比例筛选符合条件的mid, 使用--min_within_pct 0.95 --max_above_pct 0 时得到的结果一般是可以直接用的
+- batch_midi_transpose_mt.py 多线程版本, mid非常多时可显著提高效率
 
 ## 其他脚本(位于scripts文件夹)
 - auto.py 循环演奏文件夹内的所有mid文件, 需要导入core模块, 没有ui

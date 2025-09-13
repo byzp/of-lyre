@@ -1,3 +1,7 @@
+"""
+合奏主控程序, 分割音轨下发到被控机, 依赖在线曲库
+输入hash添加歌曲, 输入s停止当前演奏, 输入p继续
+"""
 import argparse
 import io
 import sys
@@ -88,17 +92,17 @@ def assign_tracks(num_agents: int, num_tracks: List[int]) -> List[List[int]]:
         assignments[-1] = num_tracks
         return assignments
     
-    # 如果轨道数量少于代理数量
+    # tracks is less than agents
     if total_tracks < num_agents:
         for i in range(total_tracks):
             assignments[i] = [num_tracks[i]]
         return assignments
     
-    # 如果轨道数量大于或等于代理数量
+    # tracks is greater than agents
     for i in range(num_agents - 1):
         assignments[i] = [num_tracks[i]]
     
-    # 给最后一个代理分配剩余的轨道
+    # Allocate the remaining tracks to the last agent
     assignments[-1] = num_tracks[num_agents - 1:]
     
     return assignments
@@ -195,7 +199,6 @@ def _send_stop(agent_url):
         r = requests.post(agent_url.rstrip('/') + '/cnt', json={"cnt": "s"}, timeout=5)
         r.raise_for_status()
     except Exception as e:
-        # 仍然记录错误，但不阻塞主线程
         print(f"[WARN] stop failed: {e}", file=sys.stderr)
         
 
