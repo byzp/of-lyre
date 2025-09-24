@@ -14,8 +14,8 @@ import mido
 from mido import MidiFile, tick2second
 import requests
 
-stop = False
 play = True
+#auto = True
 auto = False
 
 def fetch_all_latest_songs(base_url: str, page_size: int = 50, timeout: int = 5) -> List[Dict[str, Any]]:
@@ -54,18 +54,40 @@ def download_midi_bytes(base_url: str, hash_: str, timeout: int = 10) -> bytes:
     r.raise_for_status()
     return r.content
 
-def console_listener(queue: deque, known_hashes: Set[str]):
-    global stop,play
+def console_listener(queue: deque, known_hashes: Set[str], base_url: str):
+    global play
     while True:
-        h = input("Enter song hash (or 's' to stop): ").strip()
+        time.sleep(0.1)
+        h = input("> ").strip()
         if not h:
             continue
-        if h == "s":
-            stop = True
+        if h == "s" or h == "start":
             play = False
             continue
-        if h == "p":
+        if h == "p" or h == "play":
             play = True
+            continue
+        if h == "a" or h == "auto":
+            global auto
+            if auto == True:
+                auto = False
+            else:
+                auto = True
+            print(auto)
+            continue
+        if h[0] == "#":
+            if not queue:
+                songs = fetch_all_latest_songs(base_url)
+                if songs:
+                    for s in reversed(songs):
+                        h = s.get("hash") or s.get("id") or s.get("name")
+                        queue.appendleft(s)
+            hash_ = h[1:]
+            while True:
+                song = queue.popleft()
+                t_hash=song.get("hash")
+                if hash_ == t_hash or len(queue) == 0:
+                    break
             continue
         """
         if h in known_hashes:
@@ -109,20 +131,22 @@ def assign_tracks(num_agents: int, num_tracks: List[int]) -> List[List[int]]:
 
 
 def auto_play_from_api(base_url: str, agents: List[str]):
-    global stop,play,auto
+    global play,auto
     queue = deque()
     known_hashes = set()
 
-    t = threading.Thread(target=console_listener, args=(queue, known_hashes), daemon=True)
+    t = threading.Thread(target=console_listener, args=(queue, known_hashes,base_url), daemon=True)
     t.start()
 
     while True:
         while True:
             if play == False:
+                time.sleep(0.1)
                 continue
             break
         if not queue:
             if auto == False:
+                time.sleep(0.1)
                 continue
             songs = fetch_all_latest_songs(base_url)
             if songs:
@@ -181,7 +205,7 @@ def auto_play_from_api(base_url: str, agents: List[str]):
 
         wait_time = 0.0
         while wait_time < to_wait:
-            if stop:
+            if not play:
                 print("[INFO] stopping early...")
                 for agent_url in agents:
                     try:
@@ -189,7 +213,6 @@ def auto_play_from_api(base_url: str, agents: List[str]):
                         t.start()
                     except Exception as e:
                         print(f"[WARN] stop failed: {e}", file=sys.stderr)
-                stop = False
                 break
             time.sleep(0.1)  # Check periodically for stop signal
             wait_time += 0.1
