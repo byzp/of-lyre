@@ -85,7 +85,7 @@ def console_listener(queue: deque, known_hashes: Set[str], base_url: str):
             hash_ = h[1:]
             while True:
                 song = queue.popleft()
-                t_hash=song.get("hash")
+                t_hash = song.get("hash")
                 if hash_ == t_hash or len(queue) == 0:
                     break
             continue

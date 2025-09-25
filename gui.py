@@ -5,6 +5,7 @@ PyQt5 界面。通过 core 中的函数把裁剪后的事件传入 core.play_eve
 import sys
 import threading
 import time
+import argparse
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
     QLabel, QProgressBar, QFileDialog, QSlider
@@ -13,9 +14,6 @@ from PyQt5.QtCore import Qt, QTimer
 import mido
 from core import midi_to_events, play_events, midi_total_length, stop as core_stop
 import online
-
-# allows "online" load files into "gui"
-w = None
 
 class MidiKeyboardGUI(QWidget):
     def __init__(self):
@@ -100,9 +98,8 @@ class MidiKeyboardGUI(QWidget):
         self._current_play_time = 0.0
     
     def open_midi_browser(self):
-        # API base url 
-        api_base = "http://139.196.113.128:1200/"
-        self.online_dlg = online.midiBrowser(api_base, w)
+        # API base url -> main
+        self.online_dlg = online.midiBrowser(base_url, self)
         a=self.online_dlg.show()
 
     def select_file(self):
@@ -263,6 +260,12 @@ class MidiKeyboardGUI(QWidget):
         self.progress_bar.setValue(int(percent * 1000))
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--base-url', type=str, default='http://139.196.113.128:1200')
+    args = parser.parse_args()
+    global base_url
+    base_url = args.base_url
+    
     app = QApplication(sys.argv)
     w = MidiKeyboardGUI()
     w.show()
