@@ -58,16 +58,16 @@ def console_listener(queue: deque, known_hashes: Set[str], base_url: str):
     global play
     while True:
         time.sleep(0.1)
-        h = input("> ").strip()
-        if not h:
+        cmd = input("> ").strip()
+        if not cmd:
             continue
-        if h == "s" or h == "start":
+        if cmd == "s" or cmd == "start":
             play = False
             continue
-        if h == "p" or h == "play":
+        if cmd == "p" or cmd == "play":
             play = True
             continue
-        if h == "a" or h == "auto":
+        if cmd == "a" or cmd == "auto":
             global auto
             if auto == True:
                 auto = False
@@ -75,14 +75,14 @@ def console_listener(queue: deque, known_hashes: Set[str], base_url: str):
                 auto = True
             print(auto)
             continue
-        if h[0] == "#":
+        if cmd[0] == "#":
             if not queue:
                 songs = fetch_all_latest_songs(base_url)
                 if songs:
                     for s in reversed(songs):
                         h = s.get("hash") or s.get("id") or s.get("name")
                         queue.appendleft(s)
-            hash_ = h[1:]
+            hash_ = cmd[1:]
             while True:
                 song = queue.popleft()
                 t_hash = song.get("hash")
@@ -94,9 +94,9 @@ def console_listener(queue: deque, known_hashes: Set[str], base_url: str):
             print(f"[INFO] hash {h} already known, ignored")
             continue
         """
-        print(f"[INFO] manual add {h} to next")
-        queue.appendleft({"hash": h, "name": f"manual:{h}"})
-        known_hashes.add(h)
+        print(f"[INFO] manual add {cmd} to next")
+        queue.appendleft({"hash": cmd, "name": f"manual:{cmd}"})
+        known_hashes.add(cmd)
 
 
 
