@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="#E0FFFFFF"
+    android:padding="8dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Test"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:layout_gravity="center"
+        android:layout_marginBottom="8dp"/>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnSelectMidi"
+            android:layout_width="60dp"
+            android:layout_height="40dp"
+            android:text="选择"
+            android:textSize="10sp"
+            android:layout_margin="2dp"/>
+
+        <Button
+            android:id="@+id/btnPlay"
+            android:layout_width="60dp"
+            android:layout_height="40dp"
+            android:text="开始"
+            android:textSize="10sp"
+            android:layout_margin="2dp"/>
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnStop"
+            android:layout_width="60dp"
+            android:layout_height="40dp"
+            android:text="停止"
+            android:textSize="10sp"
+            android:layout_margin="2dp"/>
+
+        <Button
+            android:id="@+id/btnClose"
+            android:layout_width="60dp"
+            android:layout_height="40dp"
+            android:text="关闭"
+            android:textSize="10sp"
+            android:layout_margin="2dp"/>
+
+    </LinearLayout>
+
+</LinearLayout>

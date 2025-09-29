@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:gravity="center">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="MIDI Auto Player"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="32dp"/>
+
+    <Button
+        android:id="@+id/btnStartFloating"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="启动悬浮窗"
+        android:layout_marginBottom="16dp"/>
+
+    <Button
+        android:id="@+id/btnStopFloating"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="停止悬浮窗"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="请确保已开启无障碍服务"
+        android:textSize="12sp"
+        android:layout_marginTop="16dp"/>
+
+</LinearLayout>

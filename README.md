@@ -66,6 +66,9 @@ python controller.py --base-url http://139.196.113.128:1200 --agents http://192.
 - auto.py 循环演奏文件夹内的所有mid文件, 需要导入core模块, 没有ui
 - auto_online.py 循环演奏在线曲库的所有mid, 需要导入core模块, 没有ui
 
+## android
+- 位于apk文件夹, 触摸布局是硬编码的, 需要为设备单独适配
+
 ## 待办
 - 电钢琴映射
 

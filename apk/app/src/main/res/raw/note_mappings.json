@@ -1,0 +1,27 @@
+{
+  "screenWidth": 2712,
+  "screenHeight": 1220,
+  "mappings": [
+    {"note": 48, "x": 650, "y": 530, "isPercentage": false},
+    {"note": 50, "x": 880, "y": 530, "isPercentage": false},
+    {"note": 52, "x": 1120, "y": 530, "isPercentage": false},
+    {"note": 53, "x": 1360, "y": 530, "isPercentage": false},
+    {"note": 55, "x": 1600, "y": 530, "isPercentage": false},
+    {"note": 57, "x": 1820, "y": 530, "isPercentage": false},
+    {"note": 59, "x": 2070, "y": 530, "isPercentage": false},
+    {"note": 60, "x": 650, "y": 330, "isPercentage": false},
+    {"note": 62, "x": 880, "y": 330, "isPercentage": false},
+    {"note": 64, "x": 1120, "y": 330, "isPercentage": false},
+    {"note": 65, "x": 1360, "y": 330, "isPercentage": false},
+    {"note": 67, "x": 1600, "y": 330, "isPercentage": false},
+    {"note": 69, "x": 1820, "y": 330, "isPercentage": false},
+    {"note": 71, "x": 2070, "y": 330, "isPercentage": false},
+    {"note": 72, "x": 650, "y": 135, "isPercentage": false},
+    {"note": 74, "x": 880, "y": 135, "isPercentage": false},
+    {"note": 76, "x": 1120, "y": 135, "isPercentage": false},
+    {"note": 77, "x": 1360, "y": 135, "isPercentage": false},
+    {"note": 79, "x": 1600, "y": 135, "isPercentage": false},
+    {"note": 81, "x": 1820, "y": 135, "isPercentage": false},
+    {"note": 83, "x": 2070, "y": 135, "isPercentage": false}
+  ]
+}
