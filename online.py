@@ -244,7 +244,7 @@ class midiBrowser(QDialog):
             # expected fields: name, hash, maybe uploader, duration, etc.
             name = entry.get("name") or entry.get("title") or entry.get("filename") or "<unnamed>"
             hash_val = entry.get("hash") or entry.get("id") or entry.get("file_hash") or ""
-            meta_text = f"{name}" #"{name}  (hash: {hash_val})"
+            meta_text = f"{name}\n(up: {upload_by})" #"{name}  (hash: {hash_val})"
             row = QWidget()
             row_layout = QHBoxLayout()
             lbl = QLabel(meta_text)
