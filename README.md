@@ -38,7 +38,7 @@ python controller.py --base-url http://139.196.113.128:1200 --agents http://192.
 - 对于overfield, 最后一个受控端建议控制电子琴
 - 受控端按时间戳同步, 请确保时间精确, 否则各个音轨可能不同步
 - web版本已移除自动模式
-- ensemble/cnt/文件夹的版本引入了一种新功能, 可监听网卡获取聊天信息, 允许其他玩家以#开头的信息点歌. 请在登录之后获取连接信息, 修改controller.py第144行, 在相同目录放置在线曲库的索引songs.json, 随后运行controller.py
+- ensemble/cnt/文件夹的版本引入了一种新功能, 可监听网卡获取聊天信息, 允许其他玩家以#开头的信息点歌. 请在登录之后获取连接信息, 修改controller.py第144行, 在相同目录放置在线曲库的索引songs.json, 随后获取[proto](https://github.com/byzp/of-ps/blob/main/OverField.proto), 使用protoc编译为OverField_pb2.py, 最后运行controller.py
 
 ## 注意事项
 - 应该不会封号, 但不提供任何保证, 使用风险自负
