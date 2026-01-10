@@ -3,10 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- READ_EXTERNAL_STORAGE 在新版Android中不再足够访问所有文件 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="33" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"
@@ -28,6 +30,9 @@
             android:name=".MidiPickerActivity"
             android:exported="false" >
         </activity>
+        <activity
+            android:name=".ApiListActivity"
+            android:exported="false" />
 
         <service
             android:name=".FloatingWindowService"

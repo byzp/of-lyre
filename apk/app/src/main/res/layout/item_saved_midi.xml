@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="4dp">
+
+    <TextView
+        android:id="@+id/tvMidiName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="10sp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"/>
+
+    <Button
+        android:id="@+id/btnDelete"
+        android:layout_width="36dp"
+        android:layout_height="28dp"
+        android:text="删除"
+        android:textSize="9sp"
+        android:padding="0dp"
+        android:minWidth="0dp"
+        android:minHeight="0dp"/>
+
+</LinearLayout>

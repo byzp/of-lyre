@@ -294,7 +294,7 @@ fun parseMidiFile(
     // 最终 logging & 返回（parsedNotes 已在上面被设置）
     this.parsedNotes.forEachIndexed { index, note ->
         val endTime = note.startTime + note.duration
-        Log.d("MidiParser", "Note[$index] pitch=${note.pitch} vel=${note.velocity} start=${note.startTime} duration=${note.duration} end=$endTime")
+        //Log.d("MidiParser", "Note[$index] pitch=${note.pitch} vel=${note.velocity} start=${note.startTime} duration=${note.duration} end=$endTime")
     }
 
     Log.d("MidiParser", "Successfully parsed ${this.parsedNotes.size} notes.")

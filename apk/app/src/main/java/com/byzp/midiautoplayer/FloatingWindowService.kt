@@ -6,24 +6,19 @@ import android.graphics.PixelFormat
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
+import android.provider.OpenableColumns
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.TextView
 import android.widget.Toast
 import com.byzp.midiautoplayer.models.*
+import com.byzp.midiautoplayer.utils.*
 import kotlinx.coroutines.*
 import android.util.Log
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
-import java.util.concurrent.atomic.AtomicBoolean
-import android.os.SystemClock
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-
-
+import java.io.File
 
 class FloatingWindowService : Service() {
     private lateinit var windowManager: WindowManager
@@ -32,6 +27,12 @@ class FloatingWindowService : Service() {
     private var screenMapper: ScreenMapper? = null
     private var playJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private lateinit var midiStorage: MidiStorage
+    private var currentMidiUri: Uri? = null
+    private var currentMidiName: String? = null
+    
+    // 确认对话框相关
+    private var confirmDialog: View? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -39,10 +40,10 @@ class FloatingWindowService : Service() {
 
         midiParser = MidiParser(this)
         screenMapper = ScreenMapper(this)
+        midiStorage = MidiStorage(this)
         createFloatingWindow()
     }
 
-    // 重写onStartCommand来接收来自MidiPickerActivity的Intent
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == MidiPickerActivity.ACTION_MIDI_FILE_SELECTED) {
             intent.data?.let { uri ->
@@ -52,21 +53,103 @@ class FloatingWindowService : Service() {
         return START_STICKY
     }
 
+    /**
+     * 从URI正确提取文件名
+     */
+    private fun extractFileName(uri: Uri): String {
+        // 方法1: 从ContentResolver查询显示名称（适用于content:// URI）
+        try {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val displayNameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (displayNameIndex >= 0) {
+                        val displayName = cursor.getString(displayNameIndex)
+                        if (!displayName.isNullOrBlank()) {
+                            return displayName
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.d("FloatingWindow", "Could not query display name: ${e.message}")
+        }
+
+        // 方法2: 从路径中提取（适用于file:// URI或其他情况）
+        val path = uri.path ?: uri.lastPathSegment ?: return "unknown_${System.currentTimeMillis()}.mid"
+        
+        // 处理各种路径格式
+        var fileName = path
+            .substringAfterLast("/")  // 取最后一个/后面的部分
+            .substringAfterLast(":")   // 处理类似 "primary:Download/xxx.mid" 的格式
+        
+        // 如果文件名为空或只有扩展名，生成默认名称
+        if (fileName.isBlank() || fileName.startsWith(".")) {
+            fileName = "midi_${System.currentTimeMillis()}.mid"
+        }
+        
+        // 确保有.mid扩展名
+        if (!fileName.lowercase().endsWith(".mid") && !fileName.lowercase().endsWith(".midi")) {
+            fileName = "$fileName.mid"
+        }
+        
+        return fileName
+    }
+
+    /**
+     * 获取唯一文件名，避免覆盖已存在的文件
+     */
+    private fun getUniqueFileName(baseName: String): String {
+        val existingFiles = midiStorage.getSavedMidis()
+        val existingNames = existingFiles.map { it.name }.toSet()
+
+        // 如果不存在同名文件，直接返回
+        if (baseName !in existingNames) {
+            return baseName
+        }
+
+        // 分离文件名和扩展名
+        val lastDotIndex = baseName.lastIndexOf(".")
+        val nameWithoutExt: String
+        val ext: String
+        
+        if (lastDotIndex > 0) {
+            nameWithoutExt = baseName.substring(0, lastDotIndex)
+            ext = baseName.substring(lastDotIndex)
+        } else {
+            nameWithoutExt = baseName
+            ext = ".mid"
+        }
+
+        // 查找可用的数字后缀
+        var counter = 1
+        var newName = "${nameWithoutExt}_$counter$ext"
+        while (newName in existingNames) {
+            counter++
+            newName = "${nameWithoutExt}_$counter$ext"
+        }
+        
+        return newName
+    }
+
     private fun handleMidiFileSelection(uri: Uri) {
-        // 使用协程在后台解析文件
+        currentMidiUri = uri
+        currentMidiName = extractFileName(uri)
+        
         serviceScope.launch(Dispatchers.IO) {
             try {
-                // 持久化URI权限，以防设备重启后权限丢失
-                contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (e: Exception) {
+                    Log.d("FloatingWindow", "Could not take persistable permission: ${e.message}")
+                }
                 
-                // 调用 midiParser 处理 URI
                 val notes = midiParser?.parseMidiFile(uri)
                 withContext(Dispatchers.Main) {
                     if (notes != null && notes.isNotEmpty()) {
-                        Toast.makeText(this@FloatingWindowService, "MIDI文件加载成功", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@FloatingWindowService, "MIDI文件加载成功: $currentMidiName", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(this@FloatingWindowService, "加载失败或文件为空", Toast.LENGTH_SHORT).show()
                     }
@@ -86,6 +169,7 @@ class FloatingWindowService : Service() {
             type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
+                @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             }
             format = PixelFormat.TRANSLUCENT
@@ -118,6 +202,205 @@ class FloatingWindowService : Service() {
         floatingView.findViewById<Button>(R.id.btnClose).setOnClickListener {
             stopSelf()
         }
+
+        floatingView.findViewById<Button>(R.id.btnSaveMidi).setOnClickListener {
+            saveCurrentMidi()
+        }
+
+        val rvSavedMidis = floatingView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvSavedMidis)
+        floatingView.findViewById<Button>(R.id.btnShowList).setOnClickListener {
+            if (rvSavedMidis.visibility == View.VISIBLE) {
+                rvSavedMidis.visibility = View.GONE
+            } else {
+                showSavedMidisList(rvSavedMidis)
+            }
+        }
+    }
+
+    private fun saveCurrentMidi() {
+        val uri = currentMidiUri
+        if (uri == null) {
+            Toast.makeText(this, "没有加载中的MIDI", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    val bytes = input.readBytes()
+                    val baseName = currentMidiName ?: "saved_${System.currentTimeMillis()}.mid"
+                    // 获取唯一文件名
+                    val uniqueName = getUniqueFileName(baseName)
+                    midiStorage.saveMidi(uniqueName, bytes)
+                    
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@FloatingWindowService, "保存成功: $uniqueName", Toast.LENGTH_SHORT).show()
+                        // 刷新列表（如果可见）
+                        val rvSavedMidis = floatingView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvSavedMidis)
+                        if (rvSavedMidis.visibility == View.VISIBLE) {
+                            showSavedMidisList(rvSavedMidis)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@FloatingWindowService, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun showSavedMidisList(recyclerView: androidx.recyclerview.widget.RecyclerView) {
+        val files = midiStorage.getSavedMidis()
+        if (files.isEmpty()) {
+            Toast.makeText(this, "没有已保存的MIDI", Toast.LENGTH_SHORT).show()
+            recyclerView.visibility = View.GONE
+            return
+        }
+        recyclerView.visibility = View.VISIBLE
+        recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
+        recyclerView.adapter = SavedMidiAdapter(
+            files.toMutableList(),
+            onItemClick = { file ->
+                handleMidiFileSelection(Uri.fromFile(file))
+                recyclerView.visibility = View.GONE
+            },
+            onDeleteClick = { file, adapter ->
+                showDeleteConfirmDialog(file) {
+                    // 确认删除
+                    deleteMidiFile(file, adapter, recyclerView)
+                }
+            }
+        )
+    }
+
+    /**
+     * 显示删除确认对话框
+     */
+    private fun showDeleteConfirmDialog(file: File, onConfirm: () -> Unit) {
+        // 如果已有对话框，先移除
+        dismissConfirmDialog()
+
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_confirm, null)
+        
+        val layoutParams = WindowManager.LayoutParams().apply {
+            type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            }
+            format = PixelFormat.TRANSLUCENT
+            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            width = WindowManager.LayoutParams.WRAP_CONTENT
+            height = WindowManager.LayoutParams.WRAP_CONTENT
+            gravity = Gravity.CENTER
+        }
+
+        // 设置对话框内容
+        dialogView.findViewById<TextView>(R.id.tvDialogMessage).text = 
+            "确定要删除文件 \"${file.name}\" 吗？"
+
+        dialogView.findViewById<Button>(R.id.btnCancel).setOnClickListener {
+            dismissConfirmDialog()
+        }
+
+        dialogView.findViewById<Button>(R.id.btnConfirm).setOnClickListener {
+            dismissConfirmDialog()
+            onConfirm()
+        }
+
+        confirmDialog = dialogView
+        windowManager.addView(dialogView, layoutParams)
+    }
+
+    /**
+     * 关闭确认对话框
+     */
+    private fun dismissConfirmDialog() {
+        confirmDialog?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (e: Exception) {
+                Log.e("FloatingWindow", "Error removing dialog: ${e.message}")
+            }
+        }
+        confirmDialog = null
+    }
+
+    /**
+     * 删除MIDI文件
+     */
+    private fun deleteMidiFile(
+        file: File, 
+        adapter: SavedMidiAdapter, 
+        recyclerView: androidx.recyclerview.widget.RecyclerView
+    ) {
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                val deleted = file.delete()
+                withContext(Dispatchers.Main) {
+                    if (deleted) {
+                        Toast.makeText(this@FloatingWindowService, "已删除: ${file.name}", Toast.LENGTH_SHORT).show()
+                        // 更新列表
+                        adapter.removeItem(file)
+                        if (adapter.itemCount == 0) {
+                            recyclerView.visibility = View.GONE
+                        }
+                    } else {
+                        Toast.makeText(this@FloatingWindowService, "删除失败", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@FloatingWindowService, "删除出错: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /**
+     * 已保存MIDI文件列表适配器
+     */
+    inner class SavedMidiAdapter(
+        private val items: MutableList<File>,
+        private val onItemClick: (File) -> Unit,
+        private val onDeleteClick: (File, SavedMidiAdapter) -> Unit
+    ) : androidx.recyclerview.widget.RecyclerView.Adapter<SavedMidiAdapter.ViewHolder>() {
+
+        inner class ViewHolder(view: View) : androidx.recyclerview.widget.RecyclerView.ViewHolder(view) {
+            val tvName: TextView = view.findViewById(R.id.tvMidiName)
+            val btnDelete: Button = view.findViewById(R.id.btnDelete)
+        }
+
+        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): ViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_saved_midi, parent, false)
+            return ViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            val item = items[position]
+            holder.tvName.text = item.name
+            
+            holder.itemView.setOnClickListener { 
+                onItemClick(item) 
+            }
+            
+            holder.btnDelete.setOnClickListener { 
+                onDeleteClick(item, this) 
+            }
+        }
+
+        override fun getItemCount() = items.size
+
+        fun removeItem(file: File) {
+            val position = items.indexOf(file)
+            if (position >= 0) {
+                items.removeAt(position)
+                notifyItemRemoved(position)
+            }
+        }
     }
 
     private fun makeDraggable(view: View, params: WindowManager.LayoutParams) {
@@ -147,7 +430,6 @@ class FloatingWindowService : Service() {
     }
     
     private fun selectMidiFile() {
-        // 启动中间Activity来处理文件选择
         val intent = Intent(this, MidiPickerActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
@@ -162,7 +444,6 @@ class FloatingWindowService : Service() {
 
         playJob = serviceScope.launch {
             try {
-                // midiParser?.parsedNotes 应该在 handleMidiFileSelection 中被赋值
                 val notes = midiParser?.parsedNotes ?: emptyList()
                 if (notes.isEmpty()) {
                     withContext(Dispatchers.Main) {
@@ -186,55 +467,45 @@ class FloatingWindowService : Service() {
         }
     }
 
-    
+    private suspend fun playNotes(notes: List<MidiNote>) {
+        withContext(Dispatchers.Main) {
+            Toast.makeText(this@FloatingWindowService, "开始演奏", Toast.LENGTH_SHORT).show()
+        }
 
+        val sorted = notes.sortedBy { it.startTime }
+        var lastNoteTime = 0L
 
-    
-private suspend fun playNotes(notes: List<MidiNote>) {
-    withContext(Dispatchers.Main) {
-        Toast.makeText(this@FloatingWindowService, "开始演奏", Toast.LENGTH_SHORT).show()
-    }
+        val groups = sorted.groupBy { it.startTime }.toSortedMap()
 
-    val sorted = notes.sortedBy { it.startTime }
-    var lastNoteTime = 0L
+        for ((startTime, groupNotes) in groups) {
+            val delayTime = startTime - lastNoteTime
+            if (delayTime > 0) delay(delayTime)
 
-    // 按 startTime 分组（保留原顺序）
-    val groups = sorted.groupBy { it.startTime }.toSortedMap()
-
-    for ((startTime, groupNotes) in groups) {
-        val delayTime = startTime - lastNoteTime
-        if (delayTime > 0) delay(delayTime)
-
-        // 构建要传给服务的一组点 (x, y, duration)
-        val points = mutableListOf<Triple<Float, Float, Long>>()
-        for (note in groupNotes) {
-            val point = screenMapper?.getScreenPoint(note.pitch)
-            if (point != null) {
-                points += Triple(point.first, point.second, note.duration)
+            val points = mutableListOf<Triple<Float, Float, Long>>()
+            for (note in groupNotes) {
+                val point = screenMapper?.getScreenPoint(note.pitch)
+                if (point != null) {
+                    points += Triple(point.first, point.second, note.duration)
+                }
             }
+
+            if (points.isNotEmpty()) {
+                AutoClickService.getInstance()?.performMultiClickFromClient(points)
+                    ?: Log.w("FloatingWindow", "AutoClickService not connected or not enabled")
+            }
+
+            lastNoteTime = startTime
         }
 
-        if (points.isNotEmpty()) {
-            // 一次性发送该时间点的所有触点
-            AutoClickService.getInstance()?.performMultiClickFromClient(points)
-                ?: Log.w("FloatingWindow", "AutoClickService not connected or not enabled")
+        withContext(Dispatchers.Main) {
+            Toast.makeText(this@FloatingWindowService, "演奏结束", Toast.LENGTH_SHORT).show()
         }
-
-        lastNoteTime = startTime
     }
-
-    withContext(Dispatchers.Main) {
-        Toast.makeText(this@FloatingWindowService, "演奏结束", Toast.LENGTH_SHORT).show()
-    }
-}
 
     private fun sendClickEvent(x: Float, y: Float, duration: Long) {
-    // FloatingWindowService.kt 或其他同进程组件
-    AutoClickService.getInstance()?.performClickFromClient(x, y, duration)
-    ?: Log.w("FloatingWindow", "AutoClickService not connected or not enabled")
+        AutoClickService.getInstance()?.performClickFromClient(x, y, duration)
+            ?: Log.w("FloatingWindow", "AutoClickService not connected or not enabled")
     }
-
-
 
     private fun stopPlaying() {
         playJob?.cancel()
@@ -244,6 +515,7 @@ private suspend fun playNotes(notes: List<MidiNote>) {
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()
+        dismissConfirmDialog()
         if (::floatingView.isInitialized) {
             windowManager.removeView(floatingView)
         }

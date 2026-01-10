@@ -25,7 +25,15 @@
         android:id="@+id/btnStopFloating"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="停止悬浮窗"/>
+        android:text="停止悬浮窗"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- <Button
+        android:id="@+id/btnOpenApiList"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="在线 MIDI 列表"/>
+    -->
 
     <TextView
         android:layout_width="wrap_content"

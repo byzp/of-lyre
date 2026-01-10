@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Test"
+        android:text="MIDI Player"
         android:textSize="12sp"
         android:textStyle="bold"
         android:layout_gravity="center"
@@ -36,6 +36,14 @@
             android:textSize="10sp"
             android:layout_margin="2dp"/>
 
+        <Button
+            android:id="@+id/btnSaveMidi"
+            android:layout_width="60dp"
+            android:layout_height="40dp"
+            android:text="保存"
+            android:textSize="10sp"
+            android:layout_margin="2dp"/>
+
     </LinearLayout>
 
     <LinearLayout
@@ -59,6 +67,21 @@
             android:textSize="10sp"
             android:layout_margin="2dp"/>
 
+        <Button
+            android:id="@+id/btnShowList"
+            android:layout_width="60dp"
+            android:layout_height="40dp"
+            android:text="列表"
+            android:textSize="10sp"
+            android:layout_margin="2dp"/>
+
     </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvSavedMidis"
+        android:layout_width="184dp"
+        android:layout_height="150dp"
+        android:visibility="gone"
+        android:background="#F0FFFFFF"/>
 
 </LinearLayout>
