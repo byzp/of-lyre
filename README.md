@@ -47,7 +47,6 @@ python controller.py --base-url http://139.196.113.128:1200 --agents http://192.
 - 如果游戏本体以管理员身份运行(被管理员进程拉起的也算, 比如通过taptap启动的), 则此脚本也需以管理员身份运行
 - 成功的操作没有明显的提示, 点着看起来没反应是正常的, 但某处文字会被更改, 主要是主界面顶层按钮的下一行文字
 - 由于大家使用的字符编码不同, 汉字可能出现乱码, 因此界面使用英语(在线曲库可能还是会乱码, 稍后解决)
-- midi浏览器的server程序位于[另一个储存库](https://github.com/byzp/Genshin-Lyre-midi-player-server/tree/main/server)
 - 觉得有用给个star吧🤗
 
 ## 一些有用的工具脚本(位于tools文件夹, 基本都是gpt写的)

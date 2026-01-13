@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>MIDI 管理页</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f6f7fb;
+            margin: 0;
+            padding: 20px;
+        }
+    h1 {
+        margin-bottom: 20px;
+    }
+
+    h2 {
+        border-left: 5px solid #4a90e2;
+        padding-left: 10px;
+        margin-top: 0;
+    }
+
+    .card {
+        background: #fff;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 6px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    input, button {
+        padding: 6px;
+        margin: 4px 0;
+    }
+
+    button {
+        cursor: pointer;
+    }
+
+    .small {
+        color: #666;
+        font-size: 12px;
+    }
+
+    /* ====== 表格通用 ====== */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th, td {
+        border-bottom: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+        white-space: nowrap;
+    }
+
+    th {
+        background: #f0f0f0;
+    }
+
+    /* ====== 可滚动表格容器 ====== */
+    .table-container {
+        max-height: 360px;       /* 关键：控制可视高度 */
+        overflow-y: auto;        /* 允许滚动 */
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        position: relative;
+    }
+
+    /* 表头固定 */
+    thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #f0f0f0;
+    }
+
+    .actions button {
+        margin-right: 5px;
+    }
+
+    .loading-indicator {
+        text-align: center;
+        padding: 8px;
+        font-size: 13px;
+        color: #444;
+    }
+
+    .end-indicator {
+        text-align: center;
+        padding: 8px;
+        font-size: 12px;
+        color: #999;
+    }
+</style>
+
+</head>
+<body>
+
+<div class="card">
+    <h2>上传 MIDI</h2>
+    <input type="file" id="file">
+    <br>
+    <input type="text" id="upload_by" placeholder="上传者">
+    <br>
+    <input type="password" id="delete_password" placeholder="删除时需要的密码">
+    <br>
+    <button onclick="upload()">上传</button>
+    <p id="upload_result" class="small"></p>
+</div>
+
+<div class="card">
+    <h2>搜索歌曲</h2>
+    <input type="text" id="search_name" placeholder="歌曲名（支持模糊 / * 随机）">
+    <button onclick="search()">搜索</button>
+
+<div id="search_results"></div>
+
+</div>
+
+<div class="card">
+    <h2>歌曲列表</h2>
+    <button onclick="refreshList()">刷新</button>
+
+<div class="table-container" id="table_container">
+    <table>
+        <thead>
+            <tr>
+                <th>名称</th>
+                <th>上传者</th>
+                <th>时长(ms)</th>
+                <th>大小(bytes)</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody id="latest_list"></tbody>
+    </table>
+
+    <div id="loading" class="loading-indicator" style="display:none;">加载中...</div>
+    <div id="end" class="end-indicator" style="display:none;">没有更多数据</div>
+</div>
+
+</div>
+
+<script>
+const API_BASE = `${location.protocol}//${location.hostname}:1200`;
+
+/* 状态 */
+let currentPage = 1;
+const pageSize = 50;
+let isLoading = false;
+let isEnd = false;
+
+/* 防抖 */
+function debounce(fn, wait) {
+    let t = null;
+    return function(...args) {
+        clearTimeout(t);
+        t = setTimeout(() => fn.apply(this, args), wait);
+    };
+}
+
+function formatActions(song) {
+    return `
+        <div class="actions">
+            <button onclick="download('${song.hash}')">下载</button>
+            <button onclick="deleteSong('${song.hash}')">删除</button>
+        </div>
+    `;
+}
+
+/* 加载指定页，append 控制是否追加（true）或替换（false） */
+async function loadLatest(page = 1, append = false) {
+    if (isLoading) return;
+    if (isEnd && append) return;
+
+    isLoading = true;
+    document.getElementById("loading").style.display = "block";
+    document.getElementById("end").style.display = "none";
+
+    try {
+        const res = await fetch(`${API_BASE}/latest_songs?page=${page}&page_size=${pageSize}`);
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+        }
+        const data = await res.json();
+
+        const tbody = document.getElementById("latest_list");
+
+        if (!append) {
+            tbody.innerHTML = "";
+        }
+
+        const items = data.midis || data.results || [];
+
+        items.forEach(song => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${escapeHtml(song.name)}</td>
+                <td>${escapeHtml(song.upload_by || '')}</td>
+                <td>${song.duration ?? '-'}</td>
+                <td>${song.file_size ?? '-'}</td>
+                <td>${formatActions(song)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // 如果本次返回的数据少于 pageSize，则认为已到末尾
+        if (items.length < pageSize) {
+            isEnd = true;
+            document.getElementById("end").style.display = items.length === 0 && !append ? "none" : "block";
+        } else {
+            isEnd = false;
+            document.getElementById("end").style.display = "none";
+        }
+
+        currentPage = page;
+    } catch (err) {
+        console.error("加载失败", err);
+    } finally {
+        isLoading = false;
+        document.getElementById("loading").style.display = "none";
+    }
+}
+
+/* 在滚动容器底部时加载下一页 */
+const container = document.getElementById("table_container");
+const onScroll = debounce(() => {
+    if (isLoading || isEnd) return;
+
+    // 检测接近底部（剩余 80px 时触发）
+    const scrollTop = container.scrollTop;
+    const clientHeight = container.clientHeight;
+    const scrollHeight = container.scrollHeight;
+
+    if (scrollTop + clientHeight >= scrollHeight - 80) {
+        loadLatest(currentPage + 1, true);
+    }
+}, 150);
+
+container.addEventListener('scroll', onScroll);
+
+/* 刷新到第一页 */
+function refreshList() {
+    currentPage = 1;
+    isEnd = false;
+    loadLatest(1, false);
+}
+
+/* 上传 */
+async function upload() {
+    const file = document.getElementById("file").files[0];
+    const uploadBy = document.getElementById("upload_by").value;
+    const deletePassword = document.getElementById("delete_password").value;
+
+    if (!file) {
+        alert("请选择文件");
+        return;
+    }
+
+    const form = new FormData();
+    form.append("file", file);
+    form.append("upload_by", uploadBy);
+    form.append("delete_password", deletePassword);
+
+    try {
+        const res = await fetch(`${API_BASE}/upload`, {
+            method: "POST",
+            body: form
+        });
+
+        const data = await res.json();
+        document.getElementById("upload_result").innerText = data.message || "上传完成";
+    } catch (err) {
+        console.error(err);
+        document.getElementById("upload_result").innerText = "上传失败";
+    }
+
+    // 刷新列表到第一页
+    refreshList();
+}
+
+/* 搜索 */
+async function search() {
+    const name = document.getElementById("search_name").value;
+    const res = await fetch(`${API_BASE}/search?name=${encodeURIComponent(name)}`);
+    const data = await res.json();
+
+    if (!data.results || data.results.length === 0) {
+        document.getElementById("search_results").innerHTML = "<p class='small'>没有找到结果</p>";
+        return;
+    }
+
+    let html = `
+        <div class="table-container" style="max-height:300px;">
+        <table>
+            <thead>
+                <tr>
+                    <th>名称</th>
+                    <th>置信度</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    data.results.forEach(song => {
+        html += `
+            <tr>
+                <td>${escapeHtml(song.name)}</td>
+                <td>${song.confidence ? (song.confidence * 100).toFixed(1) + "%" : "-"}</td>
+                <td>${formatActions(song)}</td>
+            </tr>
+        `;
+    });
+
+    html += `
+            </tbody>
+        </table>
+        </div>
+    `;
+
+    document.getElementById("search_results").innerHTML = html;
+}
+
+/* 下载 */
+function download(hash) {
+    window.open(`${API_BASE}/download?hash=${encodeURIComponent(hash)}`, "_blank");
+}
+
+/* 删除 */
+async function deleteSong(hash) {
+    const pwd = prompt("请输入删除密码");
+    if (!pwd) return;
+
+    const form = new FormData();
+    form.append("hash", hash);
+    form.append("delete_password", pwd);
+
+    try {
+        const res = await fetch(`${API_BASE}/delete`, {
+            method: "POST",
+            body: form
+        });
+
+        const data = await res.json();
+        alert(data.message || "操作完成");
+    } catch (err) {
+        console.error(err);
+        alert("删除失败");
+    }
+
+    // 刷新到第一页，用户更容易看到变化
+    refreshList();
+}
+
+/* XSS 简单防护 */
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+/* 首次加载第一页 */
+refreshList();
+</script>
+<a href="https://github.com/byzp/of-lyre/tree/main/web">有关此api</a>
+</body>
+</html>
