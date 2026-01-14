@@ -876,12 +876,13 @@
 
         // 删除歌曲
         async deleteSong(hash) {
+            let pwd = '';
             // 管理员模式下不需要输入密码
             if (state.isAdmin) {
                 const confirmDelete = confirm('确定要删除这个音乐文件吗？');
                 if (!confirmDelete) return;
             } else {
-                const pwd = prompt('请输入删除密码');
+                pwd = prompt('请输入删除密码');
                 if (!pwd) return;
             }
 
