@@ -876,15 +876,26 @@
 
         // 删除歌曲
         async deleteSong(hash) {
-            const pwd = prompt('请输入删除密码');
-            if (!pwd) return;
+            // 管理员模式下不需要输入密码
+            if (state.isAdmin) {
+                const confirmDelete = confirm('确定要删除这个音乐文件吗？');
+                if (!confirmDelete) return;
+            } else {
+                const pwd = prompt('请输入删除密码');
+                if (!pwd) return;
+            }
 
             const form = new FormData();
             form.append('hash', hash);
-            form.append('delete_password', pwd);
+            form.append('delete_password', state.isAdmin ? '' : pwd);
+            
+            // 如果是管理员状态，传递密码参数
+            if (state.isAdmin && state.routeAdmin) {
+                form.append('admin_password', state.routeAdmin);
+            }
 
             try {
-                const res = await fetch(`${API_BASE}/delete`, {
+                const res = await fetch(`${API_BASE}/delete${state.routeAdmin ? `?admin=${encodeURIComponent(state.routeAdmin)}` : ''}`, {
                     method: 'POST',
                     body: form
                 });
