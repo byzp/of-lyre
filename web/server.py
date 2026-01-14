@@ -98,17 +98,27 @@ def index():
 @app.post("/delete")
 async def delete_music(
     hash: str = Form(...),
-    delete_password: str = Form(...)
+    delete_password: Optional[str] = Form(None),
+    admin_password: Optional[str] = Form(None),
+    route_admin: Optional[str] = Query(None)
 ):
     """
-    删除音乐文件
+    删除音乐文件（支持删除密码验证和管理员密码验证）
     """
     if hash not in songs_db:
         #raise HTTPException(status_code=404, detail="Music not found.")
         return {"succeed": False, "message": "未找到音乐文件。"}
 
     music = songs_db[hash]
-    if music["delete_password"] != delete_password:
+    
+    # 检查是否为管理员（通过Form参数或路由参数验证密码）
+    is_admin = False
+    if admin_password and admin_password == ADMIN_PASSWORD:
+        is_admin = True
+    elif route_admin and route_admin == ADMIN_PASSWORD:
+        is_admin = True
+    elif not delete_password or music["delete_password"] != delete_password:
+        # 既不是管理员，密码也不正确
         #raise HTTPException(status_code=400, detail="Invalid delete password.")
         return {"succeed": False, "message": "删除密码无效。"}
 
