@@ -1,375 +1,1065 @@
 <!DOCTYPE html>
-
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MIDI 管理页</title>
     <style>
+        /* CSS 变量定义 */
+        :root {
+            --primary-color: #4a90e2;
+            --bg-color: #f6f7fb;
+            --card-bg: #fff;
+            --border-color: #e9ecef;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --shadow: 0 2px 6px rgba(0,0,0,0.1);
+            --border-radius: 6px;
+            --table-header-bg: #f0f0f0;
+        }
+
+        /* 全局样式 */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
             font-family: Arial, sans-serif;
-            background: #f6f7fb;
-            margin: 0;
+            background: var(--bg-color);
+            padding: 20px;
+            color: var(--text-primary);
+        }
+
+        /* 标签页容器 */
+        .tab-container {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* 标签页导航 */
+        .tab-nav {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .tab-nav button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-bottom: 2px solid transparent;
+            background: transparent;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            color: var(--text-secondary);
+            margin-bottom: -1px;
+        }
+
+        .tab-nav button.active {
+            background: var(--card-bg);
+            border-bottom-color: var(--primary-color);
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+
+        .tab-nav button:hover:not(.active) {
+            background: #e9ecef;
+        }
+
+        /* 标签页内容 */
+        .tab-content {
             padding: 20px;
         }
-    h1 {
-        margin-bottom: 20px;
-    }
 
-    h2 {
-        border-left: 5px solid #4a90e2;
-        padding-left: 10px;
-        margin-top: 0;
-    }
+        /* 留言板标签页特殊样式 - 移除内边距限制 */
+        .tab-content #comments {
+            padding: 0;
+        }
 
-    .card {
-        background: #fff;
-        padding: 15px;
-        margin-bottom: 20px;
-        border-radius: 6px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    }
+        .tab-panel {
+            display: none;
+        }
 
-    input, button {
-        padding: 6px;
-        margin: 4px 0;
-    }
+        .tab-panel.active {
+            display: block;
+        }
 
-    button {
-        cursor: pointer;
-    }
+        /* 表单元素 */
+        input, button {
+            padding: 8px 12px;
+            margin: 8px 0;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+        }
 
-    .small {
-        color: #666;
-        font-size: 12px;
-    }
+        button {
+            cursor: pointer;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            transition: background-color 0.3s ease;
+        }
 
-    /* ====== 表格通用 ====== */
-    table {
-        width: 100%;
-        border-collapse: collapse;
-    }
+        button:hover {
+            background: #357abd;
+        }
 
-    th, td {
-        border-bottom: 1px solid #ddd;
-        padding: 8px;
-        text-align: left;
-        white-space: nowrap;
-    }
+        /* 上传表单 */
+        #upload-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
 
-    th {
-        background: #f0f0f0;
-    }
+        /* 搜索标签页内容 */
+        #search {
+            padding: 0;
+        }
 
-    /* ====== 可滚动表格容器 ====== */
-    .table-container {
-        max-height: 360px;       /* 关键：控制可视高度 */
-        overflow-y: auto;        /* 允许滚动 */
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        position: relative;
-    }
+        /* 搜索区域 */
+        #search-area {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 0 20px;
+            justify-content: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
 
-    /* 表头固定 */
-    thead th {
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        background: #f0f0f0;
-    }
+        /* 搜索输入框拉伸 */
+        #search-area input {
+            flex-grow: 1;
+            width: 100%;
+        }
 
-    .actions button {
-        margin-right: 5px;
-    }
+        /* 搜索按钮固定宽度 */
+        #search-area button {
+            white-space: nowrap;
+            min-width: 60px;
+        }
 
-    .loading-indicator {
-        text-align: center;
-        padding: 8px;
-        font-size: 13px;
-        color: #444;
-    }
+        /* 搜索结果 */
+        #search_results {
+            margin: 0;
+            text-align: left;
+        }
 
-    .end-indicator {
-        text-align: center;
-        padding: 8px;
-        font-size: 12px;
-        color: #999;
-    }
-</style>
+        /* 表格样式 */
+        .table-container {
+            max-height: calc(100vh - 300px);
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            margin-top: 15px;
+        }
 
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: left;
+            white-space: nowrap;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: var(--table-header-bg);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-weight: bold;
+        }
+
+        /* 搜索结果表格列固定 */
+        #search_results .table-container table td:nth-child(1) {
+            width: 40%;
+            position: sticky;
+            left: 0;
+            background: var(--card-bg);
+            z-index: 5;
+        }
+
+        #search_results .table-container table td:nth-child(2) {
+            width: 15%;
+            position: sticky;
+            left: 40%;
+            background: var(--card-bg);
+            z-index: 5;
+        }
+
+        #search_results .table-container table td:nth-child(3) {
+            width: 25%;
+            position: sticky;
+            left: 55%;
+            background: var(--card-bg);
+            z-index: 5;
+        }
+
+        #search_results .table-container table td:nth-child(4) {
+            width: 20%;
+            position: sticky;
+            right: 0;
+            background: var(--card-bg);
+            z-index: 5;
+        }
+        
+        /* 搜索结果表格表头固定列 */
+        #search_results .table-container table th:nth-child(1) {
+            width: 40%;
+            position: sticky;
+            left: 0;
+            z-index: 5;
+        }
+
+        #search_results .table-container table th:nth-child(2) {
+            width: 15%;
+            position: sticky;
+            left: 40%;
+            z-index: 5;
+        }
+
+        #search_results .table-container table th:nth-child(3) {
+            width: 25%;
+            position: sticky;
+            left: 55%;
+            z-index: 5;
+        }
+
+        #search_results .table-container table th:nth-child(4) {
+            width: 20%;
+            position: sticky;
+            right: 0;
+            z-index: 5;
+        }
+
+        /* 操作按钮 */
+        .actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .actions button {
+            padding: 4px 12px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        /* 删除按钮样式 */
+        .actions button:first-child {
+            background: #f44336;
+            color: white;
+        }
+
+        /* 下载按钮样式 */
+        .actions button:last-child {
+            background: #4CAF50;
+            color: white;
+        }
+
+        /* 按钮悬停效果 */
+        .actions button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        /* 状态提示 */
+        .small {
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .loading-indicator, .end-indicator {
+            text-align: center;
+            padding: 10px;
+            font-size: 13px;
+        }
+
+        .loading-indicator {
+            color: var(--text-secondary);
+        }
+
+        /* 全局滚动条优化 */
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        /* Firefox滚动条优化 */
+        :root {
+            scrollbar-width: 12px;
+            scrollbar-color: #c1c1c1 #f1f1f1;
+        }
+
+        .end-indicator {
+            color: #999;
+        }
+
+        /* 留言板样式 */
+        .comment-form {
+            width: 100%;
+            margin: 0 0 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+
+        .comment-form h4 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+
+        .comment-form input,
+        .comment-form textarea {
+            width: 100%;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .comment-form textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .comment-form button {
+            width: 100%;
+            padding: 8px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .comment-form button:hover {
+            opacity: 0.9;
+        }
+
+        .comment-item {
+            width: 100%;
+            margin: 0 0 15px;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: white;
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .comment-author {
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .comment-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .comment-content {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+
+        .comment-actions {
+            text-align: right;
+        }
+
+        .comment-actions button {
+            padding: 4px 12px;
+            font-size: 12px;
+            background: var(--danger-color, #f44336);
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .comment-actions button:hover {
+            opacity: 0.9;
+        }
+
+        /* 页脚 */
+        footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+    </style>
 </head>
 <body>
+    <div class="tab-container">
+        <!-- 标签页导航 -->
+            <div class="tab-nav">
+                <button class="active" onclick="midiApp.switchTab('upload', event)">上传 MIDI</button>
+                <button onclick="midiApp.switchTab('search', event)">搜索歌曲</button>
+                <button onclick="midiApp.switchTab('list', event)">最新上传</button>
+                <button onclick="midiApp.switchTab('comments', event)">留言板</button>
+            </div>
 
-<div class="card">
-    <h2>上传 MIDI</h2>
-    <input type="file" id="file">
-    <br>
-    <input type="text" id="upload_by" placeholder="上传者">
-    <br>
-    <input type="password" id="delete_password" placeholder="删除时需要的密码">
-    <br>
-    <button onclick="upload()">上传</button>
-    <p id="upload_result" class="small"></p>
-</div>
+        <!-- 标签页内容 -->
+        <div class="tab-content">
+            <!-- 上传标签页 -->
+            <div id="upload" class="tab-panel active">
+                <form id="upload-form">
+                    <input type="file" id="file" accept=".mid,.midi">
+                    <input type="text" id="upload_by" placeholder="上传者名称" required>
+                    <input type="password" id="delete_password" placeholder="删除时需要的密码" required>
+                    <button type="button" onclick="midiApp.upload()">上传</button>
+                    <p id="upload_result" class="small"></p>
+                </form>
+            </div>
 
-<div class="card">
-    <h2>搜索歌曲</h2>
-    <input type="text" id="search_name" placeholder="歌曲名（支持模糊 / * 随机）">
-    <button onclick="search()">搜索</button>
+            <!-- 搜索标签页 -->
+            <div id="search" class="tab-panel">
+                <div id="search-area">
+                    <input type="text" id="search_name" placeholder="歌曲名（支持模糊 / * 随机）">
+                    <button onclick="midiApp.search()">搜索</button>
+                </div>
+                <div id="search_results"></div>
+            </div>
 
-<div id="search_results"></div>
+            <!-- 列表标签页 -->
+            <div id="list" class="tab-panel">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span>最新上传</span>
+                    <button onclick="midiApp.refreshList()">刷新</button>
+                </div>
+                <div class="table-container" id="table_container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>上传者</th>
+                                <th>时长</th>
+                                <th>大小</th>
+                                <th>上传时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="latest_list"></tbody>
+                    </table>
+                    <div id="loading" class="loading-indicator" style="display:none;">加载中...</div>
+                    <div id="end" class="end-indicator" style="display:none;">没有更多数据</div>
+                </div>
+            </div>
+            
+            <!-- 留言板标签页 -->
+            <div id="comments" class="tab-panel">
+                <!-- 添加留言表单 -->
+                <div id="add-comment-form" class="comment-form">
+                    <h4>留言</h4>
+                    <form id="comment-form">
+                        <input type="text" id="comment_name" placeholder="您的昵称" required>
+                        <textarea id="comment_content" placeholder="请输入留言内容" rows="4" required></textarea>
+                        <button type="button" onclick="midiApp.addComment()">提交留言</button>
+                    </form>
+                </div>
+                
+                <!-- 刷新按钮 -->
+                <button onclick="midiApp.loadComments()" style="margin: 0 20px 10px; padding: 4px 12px; float: right;">刷新</button>
+                <div style="clear: both;"></div>
+                
+                <!-- 留言列表 -->
+                <div id="comments_list"></div>
+            </div>
+        </div>
+    </div>
 
-</div>
-
-<div class="card">
-    <h2>歌曲列表</h2>
-    <button onclick="refreshList()">刷新</button>
-
-<div class="table-container" id="table_container">
-    <table>
-        <thead>
-            <tr>
-                <th>名称</th>
-                <th>上传者</th>
-                <th>时长(ms)</th>
-                <th>大小(bytes)</th>
-                <th>操作</th>
-            </tr>
-        </thead>
-        <tbody id="latest_list"></tbody>
-    </table>
-
-    <div id="loading" class="loading-indicator" style="display:none;">加载中...</div>
-    <div id="end" class="end-indicator" style="display:none;">没有更多数据</div>
-</div>
-
-</div>
+    <footer>
+        <a href="https://github.com/byzp/of-lyre/tree/main/web" target="_blank">有关此 API</a>
+    </footer>
 
 <script>
-const API_BASE = `${location.protocol}//${location.hostname}:1200`;
-
-/* 状态 */
-let currentPage = 1;
-const pageSize = 50;
-let isLoading = false;
-let isEnd = false;
-
-/* 防抖 */
-function debounce(fn, wait) {
-    let t = null;
-    return function(...args) {
-        clearTimeout(t);
-        t = setTimeout(() => fn.apply(this, args), wait);
+// 使用IIFE封装应用，减少全局变量
+(() => {
+    const API_BASE = `${location.protocol}//${location.hostname}:1200`;
+    
+    // 应用状态
+    const state = {
+        currentPage: 1,
+        pageSize: 50,
+        isLoading: false,
+        isEnd: false,
+        isAdmin: false, // 管理员状态
+        routeAdmin: null // 路由参数中的管理员密码
     };
-}
 
-function formatActions(song) {
-    return `
-        <div class="actions">
-            <button onclick="download('${song.hash}')">下载</button>
-            <button onclick="deleteSong('${song.hash}')">删除</button>
-        </div>
-    `;
-}
-
-/* 加载指定页，append 控制是否追加（true）或替换（false） */
-async function loadLatest(page = 1, append = false) {
-    if (isLoading) return;
-    if (isEnd && append) return;
-
-    isLoading = true;
-    document.getElementById("loading").style.display = "block";
-    document.getElementById("end").style.display = "none";
-
-    try {
-        const res = await fetch(`${API_BASE}/latest_songs?page=${page}&page_size=${pageSize}`);
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
+    // 解析URL中的路由参数
+    const parseUrlParams = () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        state.routeAdmin = urlParams.get('admin');
+        if (state.routeAdmin) {
+            state.isAdmin = true; // 如果有管理员参数，设置为管理员状态
         }
-        const data = await res.json();
+    };
 
-        const tbody = document.getElementById("latest_list");
+    // DOM元素缓存
+    const elements = {
+        fileInput: document.getElementById('file'),
+        uploadByInput: document.getElementById('upload_by'),
+        deletePasswordInput: document.getElementById('delete_password'),
+        uploadResult: document.getElementById('upload_result'),
+        searchNameInput: document.getElementById('search_name'),
+        searchResults: document.getElementById('search_results'),
+        latestList: document.getElementById('latest_list'),
+        loadingIndicator: document.getElementById('loading'),
+        endIndicator: document.getElementById('end'),
+        tableContainer: document.getElementById('table_container'),
+        commentNameInput: document.getElementById('comment_name'),
+        commentContentInput: document.getElementById('comment_content'),
+        commentsList: document.getElementById('comments_list')
+    };
 
-        if (!append) {
-            tbody.innerHTML = "";
-        }
+    // 工具函数
+    const utils = {
+        // 防抖函数
+        debounce(fn, wait) {
+            let timeout = null;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => fn.apply(this, args), wait);
+            };
+        },
 
-        const items = data.midis || data.results || [];
+        // XSS防护
+        escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        },
 
-        items.forEach(song => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${escapeHtml(song.name)}</td>
-                <td>${escapeHtml(song.upload_by || '')}</td>
-                <td>${song.duration ?? '-'}</td>
-                <td>${song.file_size ?? '-'}</td>
-                <td>${formatActions(song)}</td>
+        // 格式化文件大小
+        formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        },
+
+        // 格式化时长
+        formatDuration(ms) {
+            if (!ms) return '-';
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        },
+        
+        // 格式化上传时间
+        formatUploadTime(timeStr) {
+            if (!timeStr) return '-';
+            try {
+                const date = new Date(timeStr);
+                return date.toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                return timeStr;
+            }
+        },
+        
+        // 通用提示函数
+        showMessage(message, type = 'info') {
+            const msg = document.createElement('div');
+            msg.textContent = message;
+            
+            // 根据类型设置不同颜色
+            const colors = {
+                info: '#2196F3',
+                success: '#4CAF50',
+                error: '#f44336',
+                warning: '#ff9800'
+            };
+            
+            msg.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${colors[type] || colors.info};
+                color: white;
+                padding: 10px 15px;
+                border-radius: 4px;
+                z-index: 1000;
+                font-size: 14px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             `;
-            tbody.appendChild(tr);
-        });
-
-        // 如果本次返回的数据少于 pageSize，则认为已到末尾
-        if (items.length < pageSize) {
-            isEnd = true;
-            document.getElementById("end").style.display = items.length === 0 && !append ? "none" : "block";
-        } else {
-            isEnd = false;
-            document.getElementById("end").style.display = "none";
+            
+            document.body.appendChild(msg);
+            
+            // 3秒后自动移除提示
+            setTimeout(() => msg.remove(), 3000);
+        },
+        
+        // 获取或生成设备唯一标识符
+        getDeviceId() {
+            // 尝试从localStorage获取设备ID
+            let deviceId = localStorage.getItem('midi_app_device_id');
+            
+            // 如果不存在，生成新的设备ID
+            if (!deviceId) {
+                // 使用时间戳和随机数生成唯一ID
+                deviceId = 'dev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+                // 存储到localStorage
+                localStorage.setItem('midi_app_device_id', deviceId);
+            }
+            
+            return deviceId;
         }
+    };
 
-        currentPage = page;
-    } catch (err) {
-        console.error("加载失败", err);
-    } finally {
-        isLoading = false;
-        document.getElementById("loading").style.display = "none";
-    }
-}
+    // 标签页管理
+    const tabs = {
+        switchTab(tabId, event) {
+            // 更新导航按钮状态
+            document.querySelectorAll('.tab-nav button').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
 
-/* 在滚动容器底部时加载下一页 */
-const container = document.getElementById("table_container");
-const onScroll = debounce(() => {
-    if (isLoading || isEnd) return;
+            // 更新内容面板显示
+            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            
+            // 当切换到留言标签页时，加载留言列表
+            if (tabId === 'comments') {
+                comments.loadComments();
+            }
+        }
+    };
 
-    // 检测接近底部（剩余 80px 时触发）
-    const scrollTop = container.scrollTop;
-    const clientHeight = container.clientHeight;
-    const scrollHeight = container.scrollHeight;
+    // 最新上传管理
+    const songList = {
+        // 加载最新上传
+        async loadLatest(page = 1, append = false) {
+            if (state.isLoading || (state.isEnd && append)) return;
 
-    if (scrollTop + clientHeight >= scrollHeight - 80) {
-        loadLatest(currentPage + 1, true);
-    }
-}, 150);
+            state.isLoading = true;
+            elements.loadingIndicator.style.display = 'block';
+            elements.endIndicator.style.display = 'none';
 
-container.addEventListener('scroll', onScroll);
+            try {
+                const res = await fetch(`${API_BASE}/latest_songs?page=${page}&page_size=${state.pageSize}`);
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+                const data = await res.json();
 
-/* 刷新到第一页 */
-function refreshList() {
-    currentPage = 1;
-    isEnd = false;
-    loadLatest(1, false);
-}
+                if (!append) {
+                    elements.latestList.innerHTML = '';
+                }
 
-/* 上传 */
-async function upload() {
-    const file = document.getElementById("file").files[0];
-    const uploadBy = document.getElementById("upload_by").value;
-    const deletePassword = document.getElementById("delete_password").value;
+                const items = data.midis || data.results || [];
 
-    if (!file) {
-        alert("请选择文件");
-        return;
-    }
+                items.forEach(song => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${utils.escapeHtml(song.name)}</td>
+                        <td>${utils.escapeHtml(song.upload_by || '')}</td>
+                        <td>${utils.formatDuration(song.duration)}</td>
+                        <td>${utils.formatFileSize(song.file_size)}</td>
+                        <td>${utils.formatUploadTime(song.upload_time)}</td>
+                        <td>${songList.formatActions(song)}</td>
+                    `;
+                    elements.latestList.appendChild(tr);
+                });
 
-    const form = new FormData();
-    form.append("file", file);
-    form.append("upload_by", uploadBy);
-    form.append("delete_password", deletePassword);
+                // 如果本次返回的数据少于 pageSize，则认为已到末尾
+                if (items.length < state.pageSize) {
+                    state.isEnd = true;
+                    elements.endIndicator.style.display = items.length === 0 && !append ? 'none' : 'block';
+                } else {
+                    state.isEnd = false;
+                }
 
-    try {
-        const res = await fetch(`${API_BASE}/upload`, {
-            method: "POST",
-            body: form
-        });
+                state.currentPage = page;
+            } catch (err) {
+                console.error('加载失败', err);
+                alert('加载失败，请重试');
+            } finally {
+                state.isLoading = false;
+                elements.loadingIndicator.style.display = 'none';
+            }
+        },
 
-        const data = await res.json();
-        document.getElementById("upload_result").innerText = data.message || "上传完成";
-    } catch (err) {
-        console.error(err);
-        document.getElementById("upload_result").innerText = "上传失败";
-    }
+        // 刷新列表
+        refreshList() {
+            state.currentPage = 1;
+            state.isEnd = false;
+            songList.loadLatest(1, false);
+        },
 
-    // 刷新列表到第一页
-    refreshList();
-}
+        // 格式化操作按钮
+        formatActions(song) {
+            return `
+                <div class="actions">
+                    <button onclick="midiApp.deleteSong('${song.hash}')">删除</button>
+                    <button onclick="midiApp.download('${song.hash}')">下载</button>
+                </div>
+            `;
+        },
 
-/* 搜索 */
-async function search() {
-    const name = document.getElementById("search_name").value;
-    const res = await fetch(`${API_BASE}/search?name=${encodeURIComponent(name)}`);
-    const data = await res.json();
+        // 滚动加载
+        setupScrollLoad() {
+            const onScroll = utils.debounce(() => {
+                if (state.isLoading || state.isEnd) return;
 
-    if (!data.results || data.results.length === 0) {
-        document.getElementById("search_results").innerHTML = "<p class='small'>没有找到结果</p>";
-        return;
-    }
+                // 检测接近底部（剩余 80px 时触发）
+                const { scrollTop, clientHeight, scrollHeight } = elements.tableContainer;
+                if (scrollTop + clientHeight >= scrollHeight - 80) {
+                    songList.loadLatest(state.currentPage + 1, true);
+                }
+            }, 150);
 
-    let html = `
-        <div class="table-container" style="max-height:300px;">
-        <table>
-            <thead>
-                <tr>
-                    <th>名称</th>
-                    <th>置信度</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
+            elements.tableContainer.addEventListener('scroll', onScroll);
+        }
+    };
 
-    data.results.forEach(song => {
-        html += `
-            <tr>
-                <td>${escapeHtml(song.name)}</td>
-                <td>${song.confidence ? (song.confidence * 100).toFixed(1) + "%" : "-"}</td>
-                <td>${formatActions(song)}</td>
-            </tr>
-        `;
-    });
+    // 上传功能
+    const upload = {
+        async handleUpload() {
+            const file = elements.fileInput.files[0];
+            const uploadBy = elements.uploadByInput.value;
+            const deletePassword = elements.deletePasswordInput.value;
 
-    html += `
-            </tbody>
-        </table>
-        </div>
-    `;
+            if (!file) {
+                utils.showMessage('请选择MIDI文件', 'warning');
+                return;
+            }
 
-    document.getElementById("search_results").innerHTML = html;
-}
+            const form = new FormData();
+            form.append('file', file);
+            form.append('upload_by', uploadBy);
+            form.append('delete_password', deletePassword);
 
-/* 下载 */
-function download(hash) {
-    window.open(`${API_BASE}/download?hash=${encodeURIComponent(hash)}`, "_blank");
-}
+            try {
+                const res = await fetch(`${API_BASE}/upload`, {
+                    method: 'POST',
+                    body: form
+                });
 
-/* 删除 */
-async function deleteSong(hash) {
-    const pwd = prompt("请输入删除密码");
-    if (!pwd) return;
+                const data = await res.json();
+                
+                // 使用通用提示函数
+                utils.showMessage(data.message || '上传完成', 'success');
+                
+                // 重置表单
+                document.getElementById('upload-form').reset();
+                
+                // 清空原有的提示
+                elements.uploadResult.innerText = '';
+                
+                // 刷新列表
+                songList.refreshList();
+            } catch (err) {
+                console.error('上传失败', err);
+                utils.showMessage('上传失败，请重试', 'error');
+                elements.uploadResult.innerText = '';
+            }
+        }
+    };
 
-    const form = new FormData();
-    form.append("hash", hash);
-    form.append("delete_password", pwd);
+    // 搜索功能
+    const search = {
+        async handleSearch() {
+            const name = elements.searchNameInput.value;
+            if (!name.trim()) {
+                utils.showMessage('请输入搜索关键词', 'warning');
+                elements.searchResults.innerHTML = '';
+                return;
+            }
 
-    try {
-        const res = await fetch(`${API_BASE}/delete`, {
-            method: "POST",
-            body: form
-        });
+            try {
+                const res = await fetch(`${API_BASE}/search?name=${encodeURIComponent(name)}`);
+                const data = await res.json();
 
-        const data = await res.json();
-        alert(data.message || "操作完成");
-    } catch (err) {
-        console.error(err);
-        alert("删除失败");
-    }
+                if (!data.results || data.results.length === 0) {
+                    utils.showMessage('没有找到结果', 'info');
+                    elements.searchResults.innerHTML = '';
+                    return;
+                }
 
-    // 刷新到第一页，用户更容易看到变化
-    refreshList();
-}
+                let html = `
+                    <div class="table-container" style="max-height:300px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>置信度</th>
+                                <th>上传时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
 
-/* XSS 简单防护 */
-function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
+                data.results.forEach(song => {
+                    html += `
+                        <tr>
+                            <td>${utils.escapeHtml(song.name)}</td>
+                            <td>${song.confidence ? (song.confidence * 100).toFixed(1) + '%' : '-'}</td>
+                            <td>${utils.formatUploadTime(song.upload_time)}</td>
+                            <td>${songList.formatActions(song)}</td>
+                        </tr>
+                    `;
+                });
 
-/* 首次加载第一页 */
-refreshList();
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+
+                elements.searchResults.innerHTML = html;
+            } catch (err) {
+                console.error('搜索失败', err);
+                utils.showMessage('搜索失败，请重试', 'error');
+                elements.searchResults.innerHTML = '';
+            }
+        }
+    };
+
+    // 歌曲操作
+    const songActions = {
+        // 下载歌曲
+        download(hash) {
+            window.open(`${API_BASE}/download?hash=${encodeURIComponent(hash)}`, '_blank');
+        },
+
+        // 删除歌曲
+        async deleteSong(hash) {
+            const pwd = prompt('请输入删除密码');
+            if (!pwd) return;
+
+            const form = new FormData();
+            form.append('hash', hash);
+            form.append('delete_password', pwd);
+
+            try {
+                const res = await fetch(`${API_BASE}/delete`, {
+                    method: 'POST',
+                    body: form
+                });
+
+                const data = await res.json();
+                
+                // 使用通用提示函数
+                utils.showMessage(data.message || '删除成功', 'success');
+                
+                // 刷新列表
+                songList.refreshList();
+            } catch (err) {
+                console.error('删除失败', err);
+                utils.showMessage('删除失败，请重试', 'error');
+            }
+        }
+    };
+    
+    // 留言功能
+    const comments = {
+        // 添加留言
+        async addComment() {
+            const name = elements.commentNameInput.value;
+            const content = elements.commentContentInput.value;
+            
+            if (!name.trim() || !content.trim()) {
+                utils.showMessage('请填写完整的留言信息', 'warning');
+                return;
+            }
+            
+            const form = new FormData();
+            form.append('name', name);
+            form.append('content', content);
+            form.append('device_id', utils.getDeviceId());
+            
+            try {
+                const res = await fetch(`${API_BASE}/add_comment`, {
+                    method: 'POST',
+                    body: form
+                });
+                
+                const data = await res.json();
+                
+                if (data.succeed) {
+                    utils.showMessage('留言添加成功', 'success');
+                    
+                    // 重置表单
+                    document.getElementById('comment-form').reset();
+                    
+                    // 刷新留言列表
+                    comments.loadComments();
+                } else {
+                    utils.showMessage(data.message || '留言添加失败', 'error');
+                }
+            } catch (err) {
+                console.error('添加留言失败', err);
+                utils.showMessage('留言添加失败，请重试', 'error');
+            }
+        },
+        
+        // 加载留言列表
+        async loadComments() {
+            try {
+                const res = await fetch(`${API_BASE}/comments`);
+                const data = await res.json();
+                
+                if (data.succeed) {
+                    comments.renderComments(data.comments);
+                } else {
+                    utils.showMessage(data.message || '加载留言失败', 'error');
+                }
+            } catch (err) {
+                console.error('加载留言失败', err);
+                utils.showMessage('加载留言失败，请重试', 'error');
+            }
+        },
+        
+        // 渲染留言列表
+        renderComments(commentsList) {
+            if (!commentsList || commentsList.length === 0) {
+                elements.commentsList.innerHTML = '<p class="small" style="text-align: center;">暂无留言</p>';
+                return;
+            }
+            
+            const currentDeviceId = utils.getDeviceId();
+            let html = '';
+            commentsList.forEach(comment => {
+                // 格式化时间
+                const formattedTime = utils.formatUploadTime(comment.created_at);
+                
+                // 管理员或当前设备的留言才显示删除按钮
+                const showDelete = state.isAdmin || comment.device_id === currentDeviceId;
+                const deleteButton = showDelete ? `
+                    <div class="comment-actions">
+                        <button onclick="midiApp.deleteComment('${comment.id}')">删除</button>
+                    </div>
+                ` : '';
+                
+                html += `
+                    <div class="comment-item">
+                        <div class="comment-header">
+                            <span class="comment-author">${utils.escapeHtml(comment.name)}</span>
+                            <span class="comment-time">${formattedTime}</span>
+                        </div>
+                        <div class="comment-content">${utils.escapeHtml(comment.content)}</div>
+                        ${deleteButton}
+                    </div>
+                `;
+            });
+            
+            elements.commentsList.innerHTML = html;
+        },
+        
+        // 删除留言
+        async deleteComment(commentId) {
+            if (!confirm('确定要删除这条留言吗？')) return;
+            
+            const form = new FormData();
+            form.append('comment_id', commentId);
+            form.append('device_id', utils.getDeviceId());
+            
+            // 如果是管理员状态，传递密码参数
+            if (state.isAdmin && state.routeAdmin) {
+                form.append('admin_password', state.routeAdmin);
+            }
+            
+            try {
+                const res = await fetch(`${API_BASE}/delete_comment${state.routeAdmin ? `?admin=${encodeURIComponent(state.routeAdmin)}` : ''}`, {
+                    method: 'POST',
+                    body: form
+                });
+                
+                const data = await res.json();
+                
+                if (data.succeed) {
+                    utils.showMessage('留言删除成功', 'success');
+                    comments.loadComments();
+                } else {
+                    utils.showMessage(data.message || '留言删除失败', 'error');
+                }
+            } catch (err) {
+                console.error('删除留言失败', err);
+                utils.showMessage('留言删除失败，请重试', 'error');
+            }
+        }
+    };
+
+    // 初始化应用
+    const init = () => {
+        // 解析路由参数
+        parseUrlParams();
+        
+        // 设置滚动加载
+        songList.setupScrollLoad();
+        
+        // 首次加载最新上传
+        songList.loadLatest(1, false);
+    };
+
+    // 暴露全局API（仅用于按钮点击事件）
+    window.midiApp = {
+        switchTab: tabs.switchTab,
+        upload: upload.handleUpload,
+        search: search.handleSearch,
+        refreshList: songList.refreshList,
+        download: songActions.download,
+        deleteSong: songActions.deleteSong,
+        addComment: comments.addComment,
+        loadComments: comments.loadComments,
+        deleteComment: comments.deleteComment
+    };
+
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', init);
+})();
 </script>
-<a href="https://github.com/byzp/of-lyre/tree/main/web">有关此api</a>
 </body>
 </html>
