@@ -268,6 +268,12 @@
             color: white;
         }
 
+        /* 播放按钮样式 */
+        .actions button.play {
+            background: #2196F3;
+            color: white;
+        }
+
         /* 下载按钮样式 */
         .actions button:last-child {
             background: #4CAF50;
@@ -426,6 +432,152 @@
             font-size: 12px;
             color: var(--text-secondary);
         }
+
+        /* 音频播放器样式 */
+        .audio-player {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            padding: 20px;
+            z-index: 1000;
+            min-width: 400px;
+            max-width: 600px;
+        }
+
+        .audio-player.active {
+            display: block;
+        }
+
+        .audio-player h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+
+        .player-controls {
+            margin-bottom: 15px;
+        }
+
+        .audio-player audio {
+            width: 100%;
+            margin-bottom: 15px;
+        }
+
+        .progress-container {
+            width: 100%;
+            height: 6px;
+            background: #ddd;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--primary-color);
+            border-radius: 3px;
+            width: 0%;
+            transition: width 0.1s ease-out;
+            position: relative;
+        }
+
+        .progress-bar.dragging {
+            transition: none;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -6px;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            cursor: grab;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .progress-bar:active::after {
+            cursor: grabbing;
+        }
+
+
+
+        .time-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .player-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .player-actions button {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .close-button {
+            background: #f44336;
+            color: white;
+        }
+
+        .close-button:hover {
+            background: #d32f2f;
+        }
+
+        /* 背景遮罩 */
+        .player-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+
+        .player-overlay.active {
+            display: block;
+        }
+
+        /* 等待提示样式 */
+        .waiting-message {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .waiting-message .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -504,6 +656,36 @@
                 <!-- 留言列表 -->
                 <div id="comments_list"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- 音频播放器遮罩 -->
+    <div class="player-overlay" id="playerOverlay" onclick="audioPlayer.close()"></div>
+
+    <!-- 音频播放器 -->
+    <div class="audio-player" id="audioPlayer">
+        <h3 id="playerTitle">正在播放</h3>
+            <div class="player-controls">
+            <audio id="audioElement" preload="metadata"></audio>
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div class="time-info">
+                <span id="currentTime">0:00</span>
+                <span id="duration">0:00</span>
+            </div>
+        </div>
+        <div class="player-actions">
+            <button id="playPauseButton" onclick="audioPlayer.togglePlayPause()" disabled>加载中...</button>
+            <button class="close-button" onclick="audioPlayer.close()">关闭</button>
+        </div>
+    </div>
+
+    <!-- 等待提示 -->
+    <div class="audio-player" id="waitingPlayer">
+        <div class="waiting-message">
+            <div class="spinner"></div>
+            <p>正在生成音频，请稍候...</p>
         </div>
     </div>
 
@@ -742,6 +924,7 @@
             return `
                 <div class="actions">
                     <button onclick="midiApp.deleteSong('${song.hash}')">删除</button>
+                    <button class="play" onclick="midiApp.playAudio('${song.hash}')">试听</button>
                     <button onclick="midiApp.download('${song.hash}')">下载</button>
                 </div>
             `;
@@ -1044,14 +1227,306 @@
         }
     };
 
+    // 音频播放器
+    const audioPlayer = {
+        audio: document.getElementById('audioElement'),
+        progressBar: document.getElementById('progressBar'),
+        progressContainer: document.getElementById('progressContainer'),
+        currentTimeEl: document.getElementById('currentTime'),
+        durationEl: document.getElementById('duration'),
+        playPauseButton: document.getElementById('playPauseButton'),
+        playerTitle: document.getElementById('playerTitle'),
+        audioPlayer: document.getElementById('audioPlayer'),
+        waitingPlayer: document.getElementById('waitingPlayer'),
+        playerOverlay: document.getElementById('playerOverlay'),
+        isDragging: false, // 添加拖动状态标志
+        timeout: null, // 超时处理
+        handleLoadedMetadata: null, // 事件处理器
+        handleCanPlay: null, // 事件处理器
+        handleError: null, // 事件处理器
+
+        init() {
+            this.audio.addEventListener('timeupdate', () => this.updateProgress());
+            this.audio.addEventListener('loadedmetadata', () => this.updateDuration());
+            this.audio.addEventListener('ended', () => this.onEnded());
+            // 添加错误处理，在音频加载失败时也能正确显示
+            this.audio.addEventListener('error', () => {
+                this.updateDuration();
+            });
+
+            // 点击事件
+            this.progressContainer.addEventListener('click', (e) => this.seek(e));
+            
+            // 拖动功能
+            this.setupDrag();
+        },
+
+        playAudio(hash) {
+            const url = `http://139.196.113.128:1220/wav?hash=${encodeURIComponent(hash)}`;
+            this.playerTitle.textContent = `正在试听: ${hash.substring(0, 8)}...`;
+
+            // 显示等待提示
+            this.showWaiting();
+
+            // 重置音频元素
+            this.audio.src = '';
+            this.isDragging = false;
+            
+            // 设置音频源 - 针对AAC格式优化
+            this.audio.src = url;
+            this.audio.preload = 'metadata';
+            // 对于AAC流，可能需要设置一些额外属性
+            this.audio.crossOrigin = 'anonymous';
+
+            // 清理之前的事件监听器
+            this.audio.removeEventListener('loadedmetadata', this.handleLoadedMetadata);
+            this.audio.removeEventListener('canplay', this.handleCanPlay);
+            this.audio.removeEventListener('error', this.handleError);
+
+            // 定义事件处理器
+            this.handleLoadedMetadata = () => {
+                this.showPlayer();
+                this.updateDuration();
+                console.log('音频元数据加载完成，时长:', this.audio.duration);
+            };
+
+            this.handleCanPlay = () => {
+                clearTimeout(this.timeout);
+                this.audio.play().then(() => {
+                    this.playPauseButton.textContent = '暂停';
+                    utils.showMessage('开始播放', 'success');
+                }).catch(err => {
+                    console.error('播放失败:', err);
+                    utils.showMessage('播放失败，请重试', 'error');
+                    this.close();
+                });
+            };
+
+            this.handleError = (e) => {
+                clearTimeout(this.timeout);
+                console.error('音频加载错误:', e);
+                utils.showMessage('音频加载失败，请重试', 'error');
+                this.close();
+            };
+
+            // 添加事件监听器
+            this.audio.addEventListener('loadedmetadata', this.handleLoadedMetadata, { once: true });
+            this.audio.addEventListener('canplay', this.handleCanPlay, { once: true });
+            this.audio.addEventListener('error', this.handleError, { once: true });
+
+            // 设置超时处理
+            this.timeout = setTimeout(() => {
+                utils.showMessage('音频加载超时，请重试', 'error');
+                this.close();
+            }, 15000);
+
+            // 开始加载
+            this.audio.load();
+        },
+
+        showWaiting() {
+            this.waitingPlayer.classList.add('active');
+            this.playerOverlay.classList.add('active');
+        },
+
+        showPlayer() {
+            this.waitingPlayer.classList.remove('active');
+            this.audioPlayer.classList.add('active');
+            this.playPauseButton.textContent = '播放';
+            this.playPauseButton.disabled = false;
+        },
+
+        close() {
+            // 清理超时
+            if (this.timeout) {
+                clearTimeout(this.timeout);
+                this.timeout = null;
+            }
+            
+            // 清理事件监听器
+            if (this.handleLoadedMetadata) {
+                this.audio.removeEventListener('loadedmetadata', this.handleLoadedMetadata);
+                this.handleLoadedMetadata = null;
+            }
+            if (this.handleCanPlay) {
+                this.audio.removeEventListener('canplay', this.handleCanPlay);
+                this.handleCanPlay = null;
+            }
+            if (this.handleError) {
+                this.audio.removeEventListener('error', this.handleError);
+                this.handleError = null;
+            }
+            
+            // 重置UI状态
+            this.audioPlayer.classList.remove('active');
+            this.waitingPlayer.classList.remove('active');
+            this.playerOverlay.classList.remove('active');
+            this.audio.pause();
+            this.audio.src = '';
+            this.isDragging = false;
+            this.playPauseButton.textContent = '播放';
+            this.playPauseButton.disabled = true;
+            this.progressBar.style.width = '0%';
+            this.currentTimeEl.textContent = '0:00';
+        },
+
+        togglePlayPause() {
+            if (this.audio.paused) {
+                this.audio.play();
+                this.playPauseButton.textContent = '暂停';
+            } else {
+                this.audio.pause();
+                this.playPauseButton.textContent = '播放';
+            }
+        },
+
+        updateProgress() {
+            // 如果正在拖动，不更新进度条显示
+            if (this.isDragging) {
+                return;
+            }
+            
+            // 检查音频时长是否有效
+            if (isNaN(this.audio.duration) || !isFinite(this.audio.duration)) {
+                return;
+            }
+
+            const currentTime = this.audio.currentTime;
+            const duration = this.audio.duration;
+            const percent = (currentTime / duration) * 100;
+            
+            // 更新进度条
+            this.progressBar.style.width = percent + '%';
+            this.currentTimeEl.textContent = this.formatTime(currentTime);
+            
+            // 调试信息（仅在开发时使用）
+            if (Math.random() < 0.01) { // 只输出1%的日志，避免刷屏
+                console.log('播放进度:', currentTime, '/', duration, '(', percent.toFixed(2) + '%)');
+            }
+        },
+
+        updateDuration() {
+            // 检查 duration 是否为有效数字
+            if (isNaN(this.audio.duration) || !isFinite(this.audio.duration)) {
+                this.durationEl.textContent = '0:00';
+            } else {
+                this.durationEl.textContent = this.formatTime(this.audio.duration);
+            }
+        },
+
+        seek(e) {
+            // 阻止事件冒泡和默认行为
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const rect = this.progressContainer.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+
+            // 检查 audio.duration 是否为有效数字
+            if (isNaN(this.audio.duration) || !isFinite(this.audio.duration)) {
+                console.warn('音频时长无效:', this.audio.duration);
+                return;
+            }
+
+            const time = percent * this.audio.duration;
+            // 检查计算出的 time 是否为有效数字
+            if (isFinite(time)) {
+                console.log('设置播放时间:', time, '百分比:', percent);
+                try {
+                    this.audio.currentTime = time;
+                    // 立即更新进度条显示
+                    this.progressBar.style.width = (percent * 100) + '%';
+                    this.currentTimeEl.textContent = this.formatTime(time);
+                } catch (err) {
+                    console.error('设置播放时间失败:', err);
+                }
+            }
+        },
+
+
+
+        formatTime(seconds) {
+            // 处理各种无效值情况
+            if (isNaN(seconds) || !isFinite(seconds) || seconds < 0) {
+                return '0:00';
+            }
+
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        },
+
+        setupDrag() {
+            let isDragging = false;
+            
+            const startDrag = (e) => {
+                isDragging = true;
+                this.isDragging = true; // 设置实例属性
+                this.progressContainer.style.cursor = 'grabbing';
+                this.progressBar.classList.add('dragging');
+                this.seek(e);
+            };
+            
+            const drag = (e) => {
+                if (!isDragging) return;
+                e.preventDefault();
+                this.seek(e);
+            };
+            
+            const endDrag = () => {
+                isDragging = false;
+                this.isDragging = false; // 清除实例属性
+                this.progressContainer.style.cursor = 'pointer';
+                this.progressBar.classList.remove('dragging');
+            };
+            
+            // 鼠标事件
+            this.progressContainer.addEventListener('mousedown', startDrag);
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', endDrag);
+            
+            // 触摸事件（移动设备支持）
+            this.progressContainer.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+                const mouseEvent = new MouseEvent('mousedown', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                startDrag(mouseEvent);
+            });
+            
+            document.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                e.preventDefault();
+                const touch = e.touches[0];
+                const mouseEvent = new MouseEvent('mousemove', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                drag(mouseEvent);
+            });
+            
+            document.addEventListener('touchend', endDrag);
+        },
+
+        onEnded() {
+            this.playPauseButton.textContent = '播放';
+            this.progressBar.style.width = '0%';
+            this.currentTimeEl.textContent = '0:00';
+        }
+    };
+
     // 初始化应用
     const init = () => {
         // 解析路由参数
         parseUrlParams();
-        
+
         // 设置滚动加载
         songList.setupScrollLoad();
-        
+
+        // 初始化音频播放器
+        audioPlayer.init();
+
         // 首次加载最新上传
         songList.loadLatest(1, false);
     };
@@ -1064,9 +1539,16 @@
         refreshList: songList.refreshList,
         download: songActions.download,
         deleteSong: songActions.deleteSong,
+        playAudio: audioPlayer.playAudio.bind(audioPlayer),
         addComment: comments.addComment,
         loadComments: comments.loadComments,
         deleteComment: comments.deleteComment
+    };
+
+    // 暴露音频播放器函数到全局
+    window.audioPlayer = {
+        togglePlayPause: audioPlayer.togglePlayPause.bind(audioPlayer),
+        close: audioPlayer.close.bind(audioPlayer)
     };
 
     // 页面加载完成后初始化

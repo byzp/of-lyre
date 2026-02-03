@@ -1,6 +1,7 @@
 import uvicorn
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import hashlib
@@ -48,6 +49,13 @@ logging_config = {
 logging.config.dictConfig(logging_config)
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 索引文件路径
 db_file_path = "songs.json"
@@ -255,7 +263,7 @@ def get_comments():
     }
 
 # 管理员密码配置
-ADMIN_PASSWORD = "admin"  # 生产环境建议使用环境变量或配置文件
+ADMIN_PASSWORD = "abc"  # 生产环境建议使用环境变量或配置文件
 
 @app.post("/delete_comment")
 async def delete_comment(
