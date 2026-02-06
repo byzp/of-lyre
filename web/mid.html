@@ -32,6 +32,71 @@
             color: var(--text-primary);
         }
 
+        /* 语言切换器 */
+        .language-switcher {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            gap: 5px;
+        }
+
+        .language-switcher button {
+            padding: 6px 10px;
+            font-size: 12px;
+            border: 1px solid var(--border-color);
+            background: white;
+            color: #333;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .language-switcher button:hover {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .language-switcher button.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .language-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-width: 120px;
+            display: none;
+            z-index: 1001;
+        }
+
+        .language-dropdown.show {
+            display: block;
+        }
+
+        .language-dropdown button {
+            width: 100%;
+            text-align: left;
+            border: none;
+            border-bottom: 1px solid var(--border-color);
+            background: transparent;
+            padding: 8px 12px;
+            font-size: 13px;
+        }
+
+        .language-dropdown button:last-child {
+            border-bottom: none;
+        }
+
         /* 标签页容器 */
         .tab-container {
             background: var(--card-bg);
@@ -581,13 +646,25 @@
     </style>
 </head>
 <body>
+    <!-- 语言切换器 -->
+    <div class="language-switcher">
+        <button id="currentLangBtn" onclick="language.showDropdown()">🌐 语言</button>
+        <div id="languageDropdown" class="language-dropdown">
+            <button onclick="language.switch('zh')">中文</button>
+            <button onclick="language.switch('en')">English</button>
+            <button onclick="language.switch('ja')">日本語</button>
+            <button onclick="language.switch('vi')">Tiếng Việt</button>
+            <button onclick="language.switch('ko')">한국어</button>
+        </div>
+    </div>
+
     <div class="tab-container">
         <!-- 标签页导航 -->
             <div class="tab-nav">
-                <button class="active" onclick="midiApp.switchTab('upload', event)">上传 MIDI</button>
-                <button onclick="midiApp.switchTab('search', event)">搜索歌曲</button>
-                <button onclick="midiApp.switchTab('list', event)">最新上传</button>
-                <button onclick="midiApp.switchTab('comments', event)">留言板</button>
+                <button class="active" onclick="midiApp.switchTab('upload', event)" data-key="upload-midi">上传 MIDI</button>
+                <button onclick="midiApp.switchTab('search', event)" data-key="search-songs">搜索歌曲</button>
+                <button onclick="midiApp.switchTab('list', event)" data-key="latest-uploads">最新上传</button>
+                <button onclick="midiApp.switchTab('comments', event)" data-key="message-board">留言板</button>
             </div>
 
         <!-- 标签页内容 -->
@@ -596,9 +673,9 @@
             <div id="upload" class="tab-panel active">
                 <form id="upload-form">
                     <input type="file" id="file" accept=".mid,.midi">
-                    <input type="text" id="upload_by" placeholder="上传者名称" required>
-                    <input type="password" id="delete_password" placeholder="删除时需要的密码" required>
-                    <button type="button" onclick="midiApp.upload()">上传</button>
+                    <input type="text" id="upload_by" placeholder="上传者名称" data-placeholder-key="uploader-name" required>
+                    <input type="password" id="delete_password" placeholder="删除时需要的密码" data-placeholder-key="delete-password" required>
+                    <button type="button" onclick="midiApp.upload()" data-key="upload">上传</button>
                     <p id="upload_result" class="small"></p>
                 </form>
             </div>
@@ -606,8 +683,8 @@
             <!-- 搜索标签页 -->
             <div id="search" class="tab-panel">
                 <div id="search-area">
-                    <input type="text" id="search_name" placeholder="歌曲名（支持模糊 / * 随机）">
-                    <button onclick="midiApp.search()">搜索</button>
+                    <input type="text" id="search_name" placeholder="歌曲名（支持模糊 / * 随机）" data-placeholder-key="search-placeholder">
+                    <button onclick="midiApp.search()" data-key="search">搜索</button>
                 </div>
                 <div id="search_results"></div>
             </div>
@@ -615,25 +692,25 @@
             <!-- 列表标签页 -->
             <div id="list" class="tab-panel">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <span>最新上传</span>
-                    <button onclick="midiApp.refreshList()">刷新</button>
+                    <span data-key="latest-uploads-header">最新上传</span>
+                    <button onclick="midiApp.refreshList()" data-key="refresh">刷新</button>
                 </div>
                 <div class="table-container" id="table_container">
                     <table>
                         <thead>
                             <tr>
-                                <th>名称</th>
-                                <th>上传者</th>
-                                <th>时长</th>
-                                <th>大小</th>
-                                <th>上传时间</th>
-                                <th>操作</th>
+                                <th data-key="name">名称</th>
+                                <th data-key="uploader">上传者</th>
+                                <th data-key="duration">时长</th>
+                                <th data-key="size">大小</th>
+                                <th data-key="upload-time">上传时间</th>
+                                <th data-key="actions">操作</th>
                             </tr>
                         </thead>
                         <tbody id="latest_list"></tbody>
                     </table>
-                    <div id="loading" class="loading-indicator" style="display:none;">加载中...</div>
-                    <div id="end" class="end-indicator" style="display:none;">没有更多数据</div>
+                    <div id="loading" class="loading-indicator" style="display:none;" data-key="loading">加载中...</div>
+                    <div id="end" class="end-indicator" style="display:none;" data-key="no-more-data">没有更多数据</div>
                 </div>
             </div>
             
@@ -641,18 +718,18 @@
             <div id="comments" class="tab-panel">
                 <!-- 添加留言表单 -->
                 <div id="add-comment-form" class="comment-form">
-                    <h4>留言</h4>
+                    <h4 data-key="message">留言</h4>
                     <form id="comment-form">
-                        <input type="text" id="comment_name" placeholder="您的昵称" required>
-                        <textarea id="comment_content" placeholder="请输入留言内容" rows="4" required></textarea>
-                        <button type="button" onclick="midiApp.addComment()">提交留言</button>
+                        <input type="text" id="comment_name" placeholder="您的昵称" data-placeholder-key="nickname" required>
+                        <textarea id="comment_content" placeholder="请输入留言内容" data-placeholder-key="message-content" rows="4" required></textarea>
+                        <button type="button" onclick="midiApp.addComment()" data-key="submit-message">提交留言</button>
                     </form>
                 </div>
-                
+
                 <!-- 刷新按钮 -->
-                <button onclick="midiApp.loadComments()" style="margin: 0 20px 10px; padding: 4px 12px; float: right;">刷新</button>
+                <button onclick="midiApp.loadComments()" style="margin: 0 20px 10px; padding: 4px 12px; float: right;" data-key="refresh-comments">刷新</button>
                 <div style="clear: both;"></div>
-                
+
                 <!-- 留言列表 -->
                 <div id="comments_list"></div>
             </div>
@@ -664,7 +741,7 @@
 
     <!-- 音频播放器 -->
     <div class="audio-player" id="audioPlayer">
-        <h3 id="playerTitle">正在播放</h3>
+        <h3 id="playerTitle" data-key="now-playing">正在播放</h3>
             <div class="player-controls">
             <audio id="audioElement" preload="metadata"></audio>
             <div class="progress-container" id="progressContainer">
@@ -676,8 +753,8 @@
             </div>
         </div>
         <div class="player-actions">
-            <button id="playPauseButton" onclick="audioPlayer.togglePlayPause()" disabled>加载中...</button>
-            <button class="close-button" onclick="audioPlayer.close()">关闭</button>
+            <button id="playPauseButton" onclick="audioPlayer.togglePlayPause()" disabled data-key="loading">加载中...</button>
+            <button class="close-button" onclick="audioPlayer.close()" data-key="close">关闭</button>
         </div>
     </div>
 
@@ -685,15 +762,491 @@
     <div class="audio-player" id="waitingPlayer">
         <div class="waiting-message">
             <div class="spinner"></div>
-            <p>正在生成音频，请稍候...</p>
+            <p data-key="generating-audio">正在生成音频，请稍候...</p>
         </div>
     </div>
 
     <footer>
-        <a href="https://github.com/byzp/of-lyre/tree/main/web" target="_blank">有关此 API</a>
+        <a href="https://github.com/byzp/of-lyre/tree/main/web" target="_blank" data-key="about-api">有关此 API</a>
     </footer>
 
 <script>
+// 多语言支持
+const language = {
+    // 当前语言
+    currentLang: 'en',
+
+    // 支持的语言列表
+    supportedLangs: ['zh', 'en', 'ja', 'vi', 'ko'],
+
+    // 翻译对象
+    translations: {
+        zh: {
+            title: 'MIDI 管理页',
+            'upload-midi': '上传 MIDI',
+            'search-songs': '搜索歌曲',
+            'latest-uploads': '最新上传',
+            'message-board': '留言板',
+            'upload': '上传',
+            'uploader-name': '上传者名称',
+            'delete-password': '删除时需要的密码',
+            'upload-result': '',
+            'search-placeholder': '歌曲名（支持模糊 / * 随机）',
+            'search': '搜索',
+            'latest-uploads-header': '最新上传',
+            'refresh': '刷新',
+            'name': '名称',
+            'uploader': '上传者',
+            'duration': '时长',
+            'size': '大小',
+            'upload-time': '上传时间',
+            'actions': '操作',
+            'confidence': '置信度',
+            'delete': '删除',
+            'play': '试听',
+            'download': '下载',
+            'loading': '加载中...',
+            'no-more-data': '没有更多数据',
+            'please-select-file': '请选择MIDI文件',
+            'upload-success': '上传完成',
+            'upload-failed': '上传失败，请重试',
+            'please-enter-search': '请输入搜索关键词',
+            'no-results': '没有找到结果',
+            'search-failed': '搜索失败，请重试',
+            'confirm-delete': '确定要删除这个音乐文件吗？',
+            'please-enter-delete-password': '请输入删除密码',
+            'delete-success': '删除成功',
+            'delete-failed': '删除失败，请重试',
+            'message': '留言',
+            'nickname': '您的昵称',
+            'message-content': '请输入留言内容',
+            'submit-message': '提交留言',
+            'refresh-comments': '刷新',
+            'no-comments': '暂无留言',
+            'message-add-success': '留言添加成功',
+            'message-add-failed': '留言添加失败',
+            'please-fill-message': '请填写完整的留言信息',
+            'message-delete-success': '留言删除成功',
+            'message-delete-failed': '留言删除失败',
+            'confirm-delete-message': '确定要删除这条留言吗？',
+            'now-playing': '正在试听',
+            'close': '关闭',
+            'generating-audio': '正在生成音频，请稍候...',
+            'start-playing': '开始播放',
+            'play-failed': '播放失败，请重试',
+            'audio-load-failed': '音频加载失败，请重试',
+            'audio-load-timeout': '音频加载超时，请重试',
+            'about-api': '有关此 API',
+            'pause': '暂停',
+            'play': '播放',
+            'loading': '加载中...'
+        },
+        en: {
+            title: 'MIDI Manager',
+            'upload-midi': 'Upload MIDI',
+            'search-songs': 'Search Songs',
+            'latest-uploads': 'Latest Uploads',
+            'message-board': 'Message Board',
+            'upload': 'Upload',
+            'uploader-name': 'Uploader Name',
+            'delete-password': 'Delete Password',
+            'upload-result': '',
+            'search-placeholder': 'Song Name (supports fuzzy / * random)',
+            'search': 'Search',
+            'latest-uploads-header': 'Latest Uploads',
+            'refresh': 'Refresh',
+            'name': 'Name',
+            'uploader': 'Uploader',
+            'duration': 'Duration',
+            'size': 'Size',
+            'upload-time': 'Upload Time',
+            'actions': 'Actions',
+            'confidence': 'Confidence',
+            'delete': 'Delete',
+            'play': 'Play',
+            'download': 'Download',
+            'loading': 'Loading...',
+            'no-more-data': 'No more data',
+            'please-select-file': 'Please select MIDI file',
+            'upload-success': 'Upload completed',
+            'upload-failed': 'Upload failed, please try again',
+            'please-enter-search': 'Please enter search keyword',
+            'no-results': 'No results found',
+            'search-failed': 'Search failed, please try again',
+            'confirm-delete': 'Are you sure you want to delete this music file?',
+            'please-enter-delete-password': 'Please enter delete password',
+            'delete-success': 'Delete successful',
+            'delete-failed': 'Delete failed, please try again',
+            'message': 'Message',
+            'nickname': 'Your Nickname',
+            'message-content': 'Please enter your message',
+            'submit-message': 'Submit Message',
+            'refresh-comments': 'Refresh',
+            'no-comments': 'No messages yet',
+            'message-add-success': 'Message added successfully',
+            'message-add-failed': 'Message add failed',
+            'please-fill-message': 'Please fill in complete message information',
+            'message-delete-success': 'Message deleted successfully',
+            'message-delete-failed': 'Message delete failed',
+            'confirm-delete-message': 'Are you sure you want to delete this message?',
+            'now-playing': 'Now Playing',
+            'close': 'Close',
+            'generating-audio': 'Generating audio, please wait...',
+            'start-playing': 'Start playing',
+            'play-failed': 'Playback failed, please try again',
+            'audio-load-failed': 'Audio load failed, please try again',
+            'audio-load-timeout': 'Audio load timeout, please try again',
+            'about-api': 'About this API',
+            'pause': 'Pause',
+            'play': 'Play',
+            'loading': 'Loading...'
+        },
+        ja: {
+            title: 'MIDI 管理ページ',
+            'upload-midi': 'MIDIをアップロード',
+            'search-songs': '曲を検索',
+            'latest-uploads': '最新アップロード',
+            'message-board': 'メッセージボード',
+            'upload': 'アップロード',
+            'uploader-name': 'アップローダー名',
+            'delete-password': '削除パスワード',
+            'upload-result': '',
+            'search-placeholder': '曲名（あいまい検索 / * ランダム）',
+            'search': '検索',
+            'latest-uploads-header': '最新アップロード',
+            'refresh': '更新',
+            'name': '名前',
+            'uploader': 'アップローダー',
+            'duration': '時間',
+            'size': 'サイズ',
+            'upload-time': 'アップロード時間',
+            'actions': '操作',
+            'confidence': '信頼度',
+            'delete': '削除',
+            'play': '試聴',
+            'download': 'ダウンロード',
+            'loading': '読み込み中...',
+            'no-more-data': 'データはありません',
+            'please-select-file': 'MIDIファイルを選択してください',
+            'upload-success': 'アップロード完了',
+            'upload-failed': 'アップロードに失敗しました',
+            'please-enter-search': '検索キーワードを入力してください',
+            'no-results': '結果が見つかりません',
+            'search-failed': '検索に失敗しました',
+            'confirm-delete': 'この音楽ファイルを削除してもよろしいですか？',
+            'please-enter-delete-password': '削除パスワードを入力してください',
+            'delete-success': '削除成功',
+            'delete-failed': '削除に失敗しました',
+            'message': 'メッセージ',
+            'nickname': 'あなたのニックネーム',
+            'message-content': 'メッセージを入力してください',
+            'submit-message': 'メッセージを送信',
+            'refresh-comments': '更新',
+            'no-comments': 'メッセージはまだありません',
+            'message-add-success': 'メッセージが追加されました',
+            'message-add-failed': 'メッセージの追加に失敗しました',
+            'please-fill-message': 'メッセージ情報をすべて入力してください',
+            'message-delete-success': 'メッセージが削除されました',
+            'message-delete-failed': 'メッセージの削除に失敗しました',
+            'confirm-delete-message': 'このメッセージを削除してもよろしいですか？',
+            'now-playing': '再生中',
+            'close': '閉じる',
+            'generating-audio': '音声を生成中、お待ちください...',
+            'start-playing': '再生開始',
+            'play-failed': '再生に失敗しました',
+            'audio-load-failed': '音声の読み込みに失敗しました',
+            'audio-load-timeout': '音声の読み込みがタイムアウトしました',
+            'about-api': 'このAPIについて',
+            'pause': '一時停止',
+            'play': '再生',
+            'loading': '読み込み中...'
+        },
+        vi: {
+            title: 'Trang Quản lý MIDI',
+            'upload-midi': 'Tải lên MIDI',
+            'search-songs': 'Tìm kiếm bài hát',
+            'latest-uploads': 'Tải lên mới nhất',
+            'message-board': 'Sổ tin nhắn',
+            'upload': 'Tải lên',
+            'uploader-name': 'Tên người tải lên',
+            'delete-password': 'Mật khẩu xóa',
+            'upload-result': '',
+            'search-placeholder': 'Tên bài hát (hỗ trợ mờ / * ngẫu nhiên)',
+            'search': 'Tìm kiếm',
+            'latest-uploads-header': 'Tải lên mới nhất',
+            'refresh': 'Làm mới',
+            'name': 'Tên',
+            'uploader': 'Người tải lên',
+            'duration': 'Thời lượng',
+            'size': 'Kích thước',
+            'upload-time': 'Thời gian tải lên',
+            'actions': 'Hành động',
+            'confidence': 'Độ tin cậy',
+            'delete': 'Xóa',
+            'play': 'Nghe thử',
+            'download': 'Tải xuống',
+            'loading': 'Đang tải...',
+            'no-more-data': 'Không còn dữ liệu',
+            'please-select-file': 'Vui lòng chọn tệp MIDI',
+            'upload-success': 'Tải lên thành công',
+            'upload-failed': 'Tải lên thất bại',
+            'please-enter-search': 'Vui lòng nhập từ khóa tìm kiếm',
+            'no-results': 'Không tìm thấy kết quả',
+            'search-failed': 'Tìm kiếm thất bại',
+            'confirm-delete': 'Bạn có chắc chắn muốn xóa tệp nhạc này?',
+            'please-enter-delete-password': 'Vui lòng nhập mật khẩu xóa',
+            'delete-success': 'Xóa thành công',
+            'delete-failed': 'Xóa thất bại',
+            'message': 'Tin nhắn',
+            'nickname': 'Biệt danh của bạn',
+            'message-content': 'Vui lòng nhập nội dung tin nhắn',
+            'submit-message': 'Gửi tin nhắn',
+            'refresh-comments': 'Làm mới',
+            'no-comments': 'Chưa có tin nhắn',
+            'message-add-success': 'Tin nhắn đã được thêm',
+            'message-add-failed': 'Thêm tin nhắn thất bại',
+            'please-fill-message': 'Vui lòng điền đầy đủ thông tin tin nhắn',
+            'message-delete-success': 'Tin nhắn đã được xóa',
+            'message-delete-failed': 'Xóa tin nhắn thất bại',
+            'confirm-delete-message': 'Bạn có chắc chắn muốn xóa tin nhắn này?',
+            'now-playing': 'Đang phát',
+            'close': 'Đóng',
+            'generating-audio': 'Đang tạo âm thanh, vui lòng chờ...',
+            'start-playing': 'Bắt đầu phát',
+            'play-failed': 'Phát thất bại',
+            'audio-load-failed': 'Tải âm thanh thất bại',
+            'audio-load-timeout': 'Tải âm thanh hết giờ',
+            'about-api': 'Về API này',
+            'pause': 'Tạm dừng',
+            'play': 'Phát',
+            'loading': 'Đang tải...'
+        },
+        ko: {
+            title: 'MIDI 관리 페이지',
+            'upload-midi': 'MIDI 업로드',
+            'search-songs': '노래 검색',
+            'latest-uploads': '최신 업로드',
+            'message-board': '메시지 보드',
+            'upload': '업로드',
+            'uploader-name': '업로더 이름',
+            'delete-password': '삭제 비밀번호',
+            'upload-result': '',
+            'search-placeholder': '노래 이름 (모호 / * 랜덤 검색)',
+            'search': '검색',
+            'latest-uploads-header': '최신 업로드',
+            'refresh': '새로고침',
+            'name': '이름',
+            'uploader': '업로더',
+            'duration': '시간',
+            'size': '크기',
+            'upload-time': '업로드 시간',
+            'actions': '조작',
+            'confidence': '신뢰도',
+            'delete': '삭제',
+            'play': '듣기',
+            'download': '다운로드',
+            'loading': '로딩 중...',
+            'no-more-data': '더 이상 데이터 없음',
+            'please-select-file': 'MIDI 파일을 선택하세요',
+            'upload-success': '업로드 완료',
+            'upload-failed': '업로드 실패',
+            'please-enter-search': '검색 키워드를 입력하세요',
+            'no-results': '결과를 찾을 수 없음',
+            'search-failed': '검색 실패',
+            'confirm-delete': '이 음악 파일을 삭제하시겠습니까?',
+            'please-enter-delete-password': '삭제 비밀번호를 입력하세요',
+            'delete-success': '삭제 성공',
+            'delete-failed': '삭제 실패',
+            'message': '메시지',
+            'nickname': '닉네임',
+            'message-content': '메시지 내용을 입력하세요',
+            'submit-message': '메시지 전송',
+            'refresh-comments': '새로고침',
+            'no-comments': '아직 메시지가 없습니다',
+            'message-add-success': '메시지 추가 성공',
+            'message-add-failed': '메시지 추가 실패',
+            'please-fill-message': '메시지 정보를 모두 입력하세요',
+            'message-delete-success': '메시지 삭제 성공',
+            'message-delete-failed': '메시지 삭제 실패',
+            'confirm-delete-message': '이 메시지를 삭제하시겠습니까?',
+            'now-playing': '지금 재생 중',
+            'close': '닫기',
+            'generating-audio': '오디오 생성 중, 잠시만 기다려주세요...',
+            'start-playing': '재생 시작',
+            'play-failed': '재생 실패',
+            'audio-load-failed': '오디오 로딩 실패',
+            'audio-load-timeout': '오디오 로딩 시간 초과',
+            'about-api': '이 API에 대해',
+            'pause': '일시정지',
+            'play': '재생',
+            'loading': '로딩 중...'
+        }
+    },
+
+    // 初始化
+    init() {
+        // 从 localStorage 或浏览器语言获取
+        const savedLang = localStorage.getItem('midi_app_lang');
+        const browserLang = navigator.language || navigator.userLanguage;
+
+        // 检测浏览器语言
+        if (!savedLang) {
+            const langCode = browserLang.split('-')[0].toLowerCase();
+            this.currentLang = this.supportedLangs.includes(langCode) ? langCode : 'en';
+        } else {
+            this.currentLang = savedLang;
+        }
+
+        this.updateLanguage();
+        this.updateDropdownButtons();
+    },
+
+    // 切换语言
+    switch(lang) {
+        if (!this.supportedLangs.includes(lang)) return;
+
+        this.currentLang = lang;
+        localStorage.setItem('midi_app_lang', lang);
+        this.updateLanguage();
+        this.updateDropdownButtons();
+        this.updatePlayPauseText();
+    },
+
+    // 获取翻译文本
+    t(key) {
+        return this.translations[this.currentLang]?.[key] || key;
+    },
+
+    // 更新页面语言
+    updateLanguage() {
+        // 更新标题
+        document.title = this.t('title');
+
+        // 更新有 data-key 属性的元素
+        document.querySelectorAll('[data-key]').forEach(element => {
+            const key = element.getAttribute('data-key');
+            if (this.t(key)) {
+                // 处理表格标题
+                if (element.tagName === 'TH') {
+                    element.textContent = this.t(key);
+                } else {
+                    // 处理其他元素，包括按钮
+                    element.textContent = this.t(key);
+                }
+            }
+        });
+
+
+        // 更新有 data-placeholder-key 属性的元素
+        document.querySelectorAll('[data-placeholder-key]').forEach(element => {
+            const key = element.getAttribute('data-placeholder-key');
+            if (this.t(key)) {
+                element.placeholder = this.t(key);
+            }
+        });
+
+        // 更新所有操作按钮的翻译（重新加载翻译文本）
+        this.updateAllButtons();
+
+        // 更新当前语言按钮文本
+        const langNames = {
+            zh: '中文',
+            en: 'English',
+            ja: '日本語',
+            vi: 'Tiếng Việt',
+            ko: '한국어'
+        };
+        document.getElementById('currentLangBtn').textContent = `🌐 ${langNames[this.currentLang]}`;
+    },
+
+    // 更新按钮文本（简化版本）
+    updateButtonText(key, originalText) {
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(button => {
+            if (button.textContent.trim() === originalText) {
+                button.textContent = this.t(key);
+            }
+        });
+    },
+
+    // 更新输入框占位符
+    updatePlaceholder(key, originalText) {
+        const input = document.querySelector(`input[placeholder*="${originalText.split(' ')[0]}"], textarea[placeholder*="${originalText.split(' ')[0]}"]`);
+        if (input) {
+            input.placeholder = this.t(key);
+        }
+    },
+
+    // 更新文本内容
+    updateText(key, originalText) {
+        const elements = document.querySelectorAll(`th:contains("${originalText}")`);
+        elements.forEach(element => {
+            element.textContent = this.t(key);
+        });
+    },
+
+    // 更新下拉按钮状态
+    updateDropdownButtons() {
+        const buttons = document.querySelectorAll('.language-dropdown button');
+        buttons.forEach(button => {
+            button.classList.remove('active');
+            if (button.textContent.includes(this.getLangName(this.currentLang))) {
+                button.classList.add('active');
+            }
+        });
+    },
+
+    // 获取语言名称
+    getLangName(lang) {
+        const names = {
+            zh: '中文',
+            en: 'English',
+            ja: '日本語',
+            vi: 'Tiếng Việt',
+            ko: '한국어'
+        };
+        return names[lang];
+    },
+
+    // 显示/隐藏下拉菜单
+    showDropdown() {
+        const dropdown = document.getElementById('languageDropdown');
+        dropdown.classList.toggle('show');
+
+        // 点击外部关闭
+        setTimeout(() => {
+            document.addEventListener('click', this.hideDropdown.bind(this));
+        }, 100);
+    },
+
+    hideDropdown(event) {
+        if (!event.target.closest('.language-switcher')) {
+            document.getElementById('languageDropdown').classList.remove('show');
+            document.removeEventListener('click', this.hideDropdown.bind(this));
+        }
+    },
+
+    // 更新播放/暂停按钮文本
+    updatePlayPauseText() {
+        const playPauseButton = document.getElementById('playPauseButton');
+        if (playPauseButton && !playPauseButton.disabled) {
+            const isPlaying = !audioPlayer.audio.paused;
+            playPauseButton.textContent = isPlaying ? this.t('pause') : this.t('play');
+        }
+    },
+
+    // 更新所有操作按钮的翻译
+    updateAllButtons() {
+        // 更新所有有 data-key 的按钮
+        document.querySelectorAll('button[data-key]').forEach(button => {
+            const key = button.getAttribute('data-key');
+            if (this.t(key)) {
+                button.textContent = this.t(key);
+            }
+        });
+    }
+};
+
 // 使用IIFE封装应用，减少全局变量
 (() => {
     const API_BASE = `${location.protocol}//${location.hostname}:1200`;
@@ -793,8 +1346,15 @@
         
         // 通用提示函数
         showMessage(message, type = 'info') {
+            // 如果消息是翻译键，则翻译它
+            let displayMessage = message;
+            if (message.startsWith('t-')) {
+                const key = message.substring(2);
+                displayMessage = language.t(key);
+            }
+
             const msg = document.createElement('div');
-            msg.textContent = message;
+            msg.textContent = displayMessage;
             
             // 根据类型设置不同颜色
             const colors = {
@@ -905,7 +1465,7 @@
                 state.currentPage = page;
             } catch (err) {
                 console.error('加载失败', err);
-                alert('加载失败，请重试');
+                utils.showMessage('t-delete-failed', 'error');
             } finally {
                 state.isLoading = false;
                 elements.loadingIndicator.style.display = 'none';
@@ -921,11 +1481,15 @@
 
         // 格式化操作按钮
         formatActions(song) {
+            const deleteBtn = language.t('delete');
+            const playBtn = language.t('play');
+            const downloadBtn = language.t('download');
+
             return `
                 <div class="actions">
-                    <button onclick="midiApp.deleteSong('${song.hash}')">删除</button>
-                    <button class="play" onclick="midiApp.playAudio('${song.hash}')">试听</button>
-                    <button onclick="midiApp.download('${song.hash}')">下载</button>
+                    <button onclick="midiApp.deleteSong('${song.hash}')" data-key="delete">${deleteBtn}</button>
+                    <button class="play" onclick="midiApp.playAudio('${song.hash}')" data-key="play">${playBtn}</button>
+                    <button onclick="midiApp.download('${song.hash}')" data-key="download">${downloadBtn}</button>
                 </div>
             `;
         },
@@ -954,7 +1518,7 @@
             const deletePassword = elements.deletePasswordInput.value;
 
             if (!file) {
-                utils.showMessage('请选择MIDI文件', 'warning');
+                utils.showMessage('t-please-select-file', 'warning');
                 return;
             }
 
@@ -972,7 +1536,7 @@
                 const data = await res.json();
                 
                 // 使用通用提示函数
-                utils.showMessage(data.message || '上传完成', 'success');
+                utils.showMessage(data.message || 't-upload-success', 'success');
                 
                 // 重置表单
                 document.getElementById('upload-form').reset();
@@ -984,7 +1548,7 @@
                 songList.refreshList();
             } catch (err) {
                 console.error('上传失败', err);
-                utils.showMessage('上传失败，请重试', 'error');
+                utils.showMessage('t-upload-failed', 'error');
                 elements.uploadResult.innerText = '';
             }
         }
@@ -995,7 +1559,7 @@
         async handleSearch() {
             const name = elements.searchNameInput.value;
             if (!name.trim()) {
-                utils.showMessage('请输入搜索关键词', 'warning');
+                utils.showMessage('t-please-enter-search', 'warning');
                 elements.searchResults.innerHTML = '';
                 return;
             }
@@ -1005,7 +1569,7 @@
                 const data = await res.json();
 
                 if (!data.results || data.results.length === 0) {
-                    utils.showMessage('没有找到结果', 'info');
+                    utils.showMessage('t-no-results', 'info');
                     elements.searchResults.innerHTML = '';
                     return;
                 }
@@ -1015,10 +1579,10 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>名称</th>
-                                <th>置信度</th>
-                                <th>上传时间</th>
-                                <th>操作</th>
+                                <th data-key="name">名称</th>
+                                <th data-key="confidence">置信度</th>
+                                <th data-key="upload-time">上传时间</th>
+                                <th data-key="actions">操作</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1044,7 +1608,7 @@
                 elements.searchResults.innerHTML = html;
             } catch (err) {
                 console.error('搜索失败', err);
-                utils.showMessage('搜索失败，请重试', 'error');
+                utils.showMessage('t-search-failed', 'error');
                 elements.searchResults.innerHTML = '';
             }
         }
@@ -1062,10 +1626,10 @@
             let pwd = '';
             // 管理员模式下不需要输入密码
             if (state.isAdmin) {
-                const confirmDelete = confirm('确定要删除这个音乐文件吗？');
+                const confirmDelete = confirm(language.t('confirm-delete'));
                 if (!confirmDelete) return;
             } else {
-                pwd = prompt('请输入删除密码');
+                pwd = prompt(language.t('please-enter-delete-password'));
                 if (!pwd) return;
             }
 
@@ -1085,15 +1649,15 @@
                 });
 
                 const data = await res.json();
-                
+
                 // 使用通用提示函数
-                utils.showMessage(data.message || '删除成功', 'success');
+                utils.showMessage(data.message || language.t('delete-success'), 'success');
                 
                 // 刷新列表
                 songList.refreshList();
             } catch (err) {
                 console.error('删除失败', err);
-                utils.showMessage('删除失败，请重试', 'error');
+                utils.showMessage('t-delete-failed', 'error');
             }
         }
     };
@@ -1106,7 +1670,7 @@
             const content = elements.commentContentInput.value;
             
             if (!name.trim() || !content.trim()) {
-                utils.showMessage('请填写完整的留言信息', 'warning');
+                utils.showMessage('t-please-fill-message', 'warning');
                 return;
             }
             
@@ -1124,19 +1688,19 @@
                 const data = await res.json();
                 
                 if (data.succeed) {
-                    utils.showMessage('留言添加成功', 'success');
-                    
+                    utils.showMessage('t-message-add-success', 'success');
+
                     // 重置表单
                     document.getElementById('comment-form').reset();
-                    
+
                     // 刷新留言列表
                     comments.loadComments();
                 } else {
-                    utils.showMessage(data.message || '留言添加失败', 'error');
+                    utils.showMessage(data.message || 't-message-add-failed', 'error');
                 }
             } catch (err) {
                 console.error('添加留言失败', err);
-                utils.showMessage('留言添加失败，请重试', 'error');
+                utils.showMessage('t-message-add-failed', 'error');
             }
         },
         
@@ -1149,18 +1713,18 @@
                 if (data.succeed) {
                     comments.renderComments(data.comments);
                 } else {
-                    utils.showMessage(data.message || '加载留言失败', 'error');
+                    utils.showMessage(data.message || 't-message-add-failed', 'error');
                 }
             } catch (err) {
                 console.error('加载留言失败', err);
-                utils.showMessage('加载留言失败，请重试', 'error');
+                utils.showMessage('t-message-add-failed', 'error');
             }
         },
         
         // 渲染留言列表
         renderComments(commentsList) {
             if (!commentsList || commentsList.length === 0) {
-                elements.commentsList.innerHTML = '<p class="small" style="text-align: center;">暂无留言</p>';
+                elements.commentsList.innerHTML = `<p class="small" style="text-align: center;">${language.t('t-no-comments')}</p>`;
                 return;
             }
             
@@ -1195,7 +1759,7 @@
         
         // 删除留言
         async deleteComment(commentId) {
-            if (!confirm('确定要删除这条留言吗？')) return;
+            if (!confirm(language.t('confirm-delete-message'))) return;
             
             const form = new FormData();
             form.append('comment_id', commentId);
@@ -1215,14 +1779,14 @@
                 const data = await res.json();
                 
                 if (data.succeed) {
-                    utils.showMessage('留言删除成功', 'success');
+                    utils.showMessage('t-message-delete-success', 'success');
                     comments.loadComments();
                 } else {
-                    utils.showMessage(data.message || '留言删除失败', 'error');
+                    utils.showMessage(data.message || 't-message-delete-failed', 'error');
                 }
             } catch (err) {
                 console.error('删除留言失败', err);
-                utils.showMessage('留言删除失败，请重试', 'error');
+                utils.showMessage('t-message-delete-failed', 'error');
             }
         }
     };
@@ -1263,7 +1827,7 @@
 
         playAudio(hash) {
             const url = `http://139.196.113.128:1220/wav?hash=${encodeURIComponent(hash)}`;
-            this.playerTitle.textContent = `正在试听: ${hash.substring(0, 8)}...`;
+            this.playerTitle.textContent = `${language.t('now-playing')}: ${hash.substring(0, 8)}...`;
 
             // 显示等待提示
             this.showWaiting();
@@ -1293,11 +1857,11 @@
             this.handleCanPlay = () => {
                 clearTimeout(this.timeout);
                 this.audio.play().then(() => {
-                    this.playPauseButton.textContent = '暂停';
-                    utils.showMessage('开始播放', 'success');
+                    this.playPauseButton.textContent = language.t('pause');
+                    utils.showMessage('t-start-playing', 'success');
                 }).catch(err => {
                     console.error('播放失败:', err);
-                    utils.showMessage('播放失败，请重试', 'error');
+                    utils.showMessage('t-play-failed', 'error');
                     this.close();
                 });
             };
@@ -1305,7 +1869,7 @@
             this.handleError = (e) => {
                 clearTimeout(this.timeout);
                 console.error('音频加载错误:', e);
-                utils.showMessage('音频加载失败，请重试', 'error');
+                utils.showMessage('t-audio-load-failed', 'error');
                 this.close();
             };
 
@@ -1316,7 +1880,7 @@
 
             // 设置超时处理
             this.timeout = setTimeout(() => {
-                utils.showMessage('音频加载超时，请重试', 'error');
+                utils.showMessage('t-audio-load-timeout', 'error');
                 this.close();
             }, 15000);
 
@@ -1373,11 +1937,10 @@
         togglePlayPause() {
             if (this.audio.paused) {
                 this.audio.play();
-                this.playPauseButton.textContent = '暂停';
             } else {
                 this.audio.pause();
-                this.playPauseButton.textContent = '播放';
             }
+            language.updatePlayPauseText();
         },
 
         updateProgress() {
@@ -1510,7 +2073,7 @@
         },
 
         onEnded() {
-            this.playPauseButton.textContent = '播放';
+            this.playPauseButton.textContent = language.t('play');
             this.progressBar.style.width = '0%';
             this.currentTimeEl.textContent = '0:00';
         }
@@ -1520,6 +2083,9 @@
     const init = () => {
         // 解析路由参数
         parseUrlParams();
+
+        // 初始化语言系统
+        language.init();
 
         // 设置滚动加载
         songList.setupScrollLoad();
