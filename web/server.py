@@ -190,7 +190,10 @@ def search_songs(name: str):
     根据歌曲名称搜索歌曲。
     """
     if name=="*":
+      while True:
         key=random.choice(list(songs_db.keys()))
+        if songs_db[key]["duration"]>1000*60*10:
+            continue
         results = [{k: v for k, v in songs_db[key].items() if k != "delete_password"}]
         return {
             "message": f"随机1首歌曲",
