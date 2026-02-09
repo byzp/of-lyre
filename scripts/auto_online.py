@@ -1,6 +1,7 @@
 """
 自动化脚本, 循环演奏在线曲库的mid, 无ui
 """
+
 import requests
 import io
 import time
@@ -13,13 +14,20 @@ import mido
 
 from core import midi_to_events, play_events, midi_total_length, stop as core_stop
 
-def fetch_all_latest_songs(base_url: str, page_size: int = 50, timeout: int = 5) -> List[Dict[str, Any]]:
+
+def fetch_all_latest_songs(
+    base_url: str, page_size: int = 50, timeout: int = 5
+) -> List[Dict[str, Any]]:
     # Fetch all pages from /latest_songs; return list in API order (newest->old assumed)
     songs: List[Dict[str, Any]] = []
     page = 1
     while True:
         try:
-            r = requests.get(f"{base_url.rstrip('/')}/latest_songs", params={"page": page, "page_size": page_size}, timeout=timeout)
+            r = requests.get(
+                f"{base_url.rstrip('/')}/latest_songs",
+                params={"page": page, "page_size": page_size},
+                timeout=timeout,
+            )
             r.raise_for_status()
             data = r.json()
             page_list = data.get("midis", [])
@@ -29,15 +37,21 @@ def fetch_all_latest_songs(base_url: str, page_size: int = 50, timeout: int = 5)
                 break
             page += 1
         except Exception as e:
-            print(f"[ERROR] fetch latest_songs page {page} failed: {e}", file=sys.stderr)
+            print(
+                f"[ERROR] fetch latest_songs page {page} failed: {e}", file=sys.stderr
+            )
             break
     return songs
 
+
 def download_midi_bytes(base_url: str, hash_: str, timeout: int = 10) -> bytes:
     # Download midi bytes
-    r = requests.get(f"{base_url.rstrip('/')}/download", params={"hash": hash_}, timeout=timeout)
+    r = requests.get(
+        f"{base_url.rstrip('/')}/download", params={"hash": hash_}, timeout=timeout
+    )
     r.raise_for_status()
     return r.content
+
 
 def build_initial_queue(base_url: str) -> (deque, Set[str]):
     # Build initial deque and known hash set. Leftmost (popleft) is newest (songs[0])
@@ -52,7 +66,10 @@ def build_initial_queue(base_url: str) -> (deque, Set[str]):
         uniq.append(s)
     return uniq, seen
 
-def insert_new_at_top(queue: deque, new_songs: List[Dict[str, Any]], known_hashes: Set[str]):
+
+def insert_new_at_top(
+    queue: deque, new_songs: List[Dict[str, Any]], known_hashes: Set[str]
+):
     # Insert unseen songs at queue top (left). new_songs assumed newest->old; preserve that order.
     filtered = []
     for s in new_songs:
@@ -66,6 +83,7 @@ def insert_new_at_top(queue: deque, new_songs: List[Dict[str, Any]], known_hashe
         queue.appendleft(s)
         h = s.get("hash") or s.get("id") or s.get("name")
         known_hashes.add(h)
+
 
 def auto_play_from_api(base_url: str):
     # keep queue, download and play
@@ -116,7 +134,9 @@ def auto_play_from_api(base_url: str):
             continue
 
         try:
-            events = midi_to_events(midi_file, min_time=0, max_time=midi_total_length(midi_file))
+            events = midi_to_events(
+                midi_file, min_time=0, max_time=midi_total_length(midi_file)
+            )
             stop_flag = threading.Event()
             play_events(events, stop_flag, None)
         except Exception as e:
@@ -131,6 +151,7 @@ def auto_play_from_api(base_url: str):
 
         time.sleep(0.05)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Auto-download and play MIDI from API")
     parser.add_argument("--base-url", type=str, default="http://139.196.113.128:1200")
@@ -140,5 +161,3 @@ if __name__ == "__main__":
         auto_play_from_api(args.base_url)
     except KeyboardInterrupt:
         print("\n[INFO] interrupted, exiting.")
-
-

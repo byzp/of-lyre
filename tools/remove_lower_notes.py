@@ -1,5 +1,6 @@
 import pretty_midi
 
+
 def remove_lower_notes(input_file, output_file):
     # 读取 MIDI 文件
     midi_data = pretty_midi.PrettyMIDI(input_file)
@@ -8,7 +9,10 @@ def remove_lower_notes(input_file, output_file):
         # 存储按 (start, end) 分组的音符
         grouped_notes = {}
         for note in instrument.notes:
-            key = (round(note.start, 5), round(note.end, 5))  # 用起止时间做key（避免浮点误差）
+            key = (
+                round(note.start, 5),
+                round(note.end, 5),
+            )  # 用起止时间做key（避免浮点误差）
             grouped_notes.setdefault(key, []).append(note)
 
         new_notes = []

@@ -21,6 +21,7 @@ import mido
 from copy import deepcopy
 from math import isclose
 
+
 def collect_events(mid):
     """
     收集所有 track 中的消息并计算每条消息的绝对 tick（原始文件坐标）。
@@ -42,10 +43,10 @@ def collect_events(mid):
             # 保存消息以便重建轨道时使用
             track_msgs.append((abs_tick, msg, idx))
             # tempo 事件
-            if msg.is_meta and msg.type == 'set_tempo':
+            if msg.is_meta and msg.type == "set_tempo":
                 tempo_changes.append((abs_tick, msg.tempo))
             # note 事件（note_on velocity>0 当作开始，note_off 或 note_on vel==0 当作结束）
-            if not msg.is_meta and (msg.type == 'note_on' or msg.type == 'note_off'):
+            if not msg.is_meta and (msg.type == "note_on" or msg.type == "note_off"):
                 all_note_msgs.append((abs_tick, msg))
         messages_by_track.append(track_msgs)
 
@@ -56,6 +57,7 @@ def collect_events(mid):
         # 在 0 tick 插入默认 tempo（不会重复如果已经有 0）
         tempo_changes.insert(0, (0, 500000))
     return messages_by_track, all_note_msgs, tempo_changes
+
 
 def compute_seconds_for_events(messages_by_track, tempo_changes, ticks_per_beat):
     """
@@ -71,14 +73,14 @@ def compute_seconds_for_events(messages_by_track, tempo_changes, ticks_per_beat)
     # 收集 note events from messages_by_track
     for track_msgs in messages_by_track:
         for abs_tick, msg, idx in track_msgs:
-            if not msg.is_meta and (msg.type in ('note_on', 'note_off')):
-                merged.append(('note', abs_tick, msg))
+            if not msg.is_meta and (msg.type in ("note_on", "note_off")):
+                merged.append(("note", abs_tick, msg))
 
     for t_tick, tempo in tempo_changes:
-        merged.append(('tempo', t_tick, tempo))
+        merged.append(("tempo", t_tick, tempo))
 
     # sort by tick, tempo events before note events at same tick
-    merged.sort(key=lambda x: (x[1], 0 if x[0]=='tempo' else 1))
+    merged.sort(key=lambda x: (x[1], 0 if x[0] == "tempo" else 1))
 
     # sweep to compute seconds
     last_tick = 0
@@ -89,11 +91,12 @@ def compute_seconds_for_events(messages_by_track, tempo_changes, ticks_per_beat)
         delta_ticks = tick - last_tick
         sec_acc += (delta_ticks * (cur_tempo / 1_000_000.0)) / ticks_per_beat
         last_tick = tick
-        if kind == 'tempo':
+        if kind == "tempo":
             cur_tempo = payload
         else:
-            note_events_sec.append({'tick': tick, 'sec': sec_acc, 'msg': payload})
+            note_events_sec.append({"tick": tick, "sec": sec_acc, "msg": payload})
     return note_events_sec
+
 
 def find_silence_intervals(note_events_sec, ticks_per_beat):
     """
@@ -102,7 +105,7 @@ def find_silence_intervals(note_events_sec, ticks_per_beat):
       { 'start_tick':, 'end_tick':, 'start_sec':, 'end_sec':, 'duration_sec':, 'duration_ticks': }
     """
     # 按秒排序
-    note_events_sec.sort(key=lambda x: (x['sec'], x['tick']))
+    note_events_sec.sort(key=lambda x: (x["sec"], x["tick"]))
     # 我们需要模拟“有无音”的状态：note_on (vel>0) => 音开始，note_off 或 note_on vel=0 => 音结束。
     active = set()  # set of (channel, note) 当作活动音符计数
     intervals = []
@@ -116,14 +119,15 @@ def find_silence_intervals(note_events_sec, ticks_per_beat):
     # If multiple events share the same time, we process note-off before note-on to avoid zero-length overlaps producing silence.
     # So sort with note_off first.
     def is_on(ev):
-        m = ev['msg']
-        return (m.type == 'note_on' and m.velocity > 0)
+        m = ev["msg"]
+        return m.type == "note_on" and m.velocity > 0
+
     def is_off(ev):
-        m = ev['msg']
-        return (m.type == 'note_off') or (m.type == 'note_on' and m.velocity == 0)
+        m = ev["msg"]
+        return (m.type == "note_off") or (m.type == "note_on" and m.velocity == 0)
 
     # Build sorted events list with a stable ordering preference: off before on at same time
-    events = sorted(note_events_sec, key=lambda e: (e['sec'], 0 if is_off(e) else 1))
+    events = sorted(note_events_sec, key=lambda e: (e["sec"], 0 if is_off(e) else 1))
 
     # find first note event time (start of music) and last note event time (end of music)
     if not events:
@@ -131,21 +135,23 @@ def find_silence_intervals(note_events_sec, ticks_per_beat):
 
     # iterate
     for ev in events:
-        m = ev['msg']
-        ch_note = (getattr(m, 'channel', None), getattr(m, 'note', None))
+        m = ev["msg"]
+        ch_note = (getattr(m, "channel", None), getattr(m, "note", None))
         if is_on(ev):
             # if was in silence, that silence ends here
             if len(active) == 0:
                 # silence ended at this event.time
                 if silence_start_tick is not None:
-                    intervals.append({
-                        'start_tick': silence_start_tick,
-                        'end_tick': ev['tick'],
-                        'start_sec': silence_start_sec,
-                        'end_sec': ev['sec'],
-                        'duration_sec': ev['sec'] - silence_start_sec,
-                        'duration_ticks': ev['tick'] - silence_start_tick
-                    })
+                    intervals.append(
+                        {
+                            "start_tick": silence_start_tick,
+                            "end_tick": ev["tick"],
+                            "start_sec": silence_start_sec,
+                            "end_sec": ev["sec"],
+                            "duration_sec": ev["sec"] - silence_start_sec,
+                            "duration_ticks": ev["tick"] - silence_start_tick,
+                        }
+                    )
                     silence_start_tick = None
                     silence_start_sec = None
             active.add(ch_note)
@@ -155,12 +161,13 @@ def find_silence_intervals(note_events_sec, ticks_per_beat):
                 active.remove(ch_note)
             # if becomes empty, start a silence
             if len(active) == 0:
-                silence_start_tick = ev['tick']
-                silence_start_sec = ev['sec']
+                silence_start_tick = ev["tick"]
+                silence_start_sec = ev["sec"]
 
     # We only consider silences that are strictly between notes; trailing silence after last note is ignored by this algorithm.
     # (User said "note 之间", 所以这是合适的。)
     return intervals
+
 
 def compute_intervals_to_shrink(intervals, max_silence_seconds):
     """
@@ -169,8 +176,8 @@ def compute_intervals_to_shrink(intervals, max_silence_seconds):
     """
     out = []
     for it in intervals:
-        orig_sec = it['duration_sec']
-        orig_ticks = it['duration_ticks']
+        orig_sec = it["duration_sec"]
+        orig_ticks = it["duration_ticks"]
         if orig_sec <= max_silence_seconds or orig_ticks == 0:
             r = 1.0
             new_ticks = orig_ticks
@@ -182,9 +189,17 @@ def compute_intervals_to_shrink(intervals, max_silence_seconds):
                 new_ticks = 0
             shrink = orig_ticks - new_ticks
         d = it.copy()
-        d.update({'r': r, 'orig_ticks': orig_ticks, 'new_ticks': new_ticks, 'shrink_ticks': shrink})
+        d.update(
+            {
+                "r": r,
+                "orig_ticks": orig_ticks,
+                "new_ticks": new_ticks,
+                "shrink_ticks": shrink,
+            }
+        )
         out.append(d)
     return out
+
 
 def map_tick(orig_tick, intervals_sorted):
     """
@@ -194,10 +209,12 @@ def map_tick(orig_tick, intervals_sorted):
     """
     shrink_before = 0
     for it in intervals_sorted:
-        s = it['start_tick']; e = it['end_tick']; r = it['r']
-        orig_len = it['orig_ticks']
-        new_len = it['new_ticks']
-        shrink = it['shrink_ticks']
+        s = it["start_tick"]
+        e = it["end_tick"]
+        r = it["r"]
+        orig_len = it["orig_ticks"]
+        new_len = it["new_ticks"]
+        shrink = it["shrink_ticks"]
         if orig_tick < s:
             return orig_tick - shrink_before
         elif s <= orig_tick < e:
@@ -210,12 +227,13 @@ def map_tick(orig_tick, intervals_sorted):
             shrink_before += shrink
     return orig_tick - shrink_before
 
+
 def rebuild_midi(mid, messages_by_track, intervals_to_shrink, output_path):
     """
     根据 intervals_to_shrink 映射所有 messages 的绝对 ticks，再按轨道重建 delta times 并保存文件。
     """
     # 按 start_tick 排序 intervals
-    intervals_sorted = sorted(intervals_to_shrink, key=lambda x: x['start_tick'])
+    intervals_sorted = sorted(intervals_to_shrink, key=lambda x: x["start_tick"])
 
     # 计算所有消息的新绝对 tick（按轨道）
     new_mid = mido.MidiFile(type=mid.type, ticks_per_beat=mid.ticks_per_beat)
@@ -239,25 +257,38 @@ def rebuild_midi(mid, messages_by_track, intervals_to_shrink, output_path):
         new_mid.tracks.append(new_track)
 
     # 统计总共减少的 ticks（可选反馈）
-    total_orig = sum(it['orig_ticks'] for it in intervals_sorted)
-    total_new = sum(it['new_ticks'] for it in intervals_sorted)
+    total_orig = sum(it["orig_ticks"] for it in intervals_sorted)
+    total_new = sum(it["new_ticks"] for it in intervals_sorted)
     total_shrunk = total_orig - total_new
 
     new_mid.save(output_path)
     return total_shrunk, intervals_sorted
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Shrink long silences (across all tracks) in a MIDI file.")
+    parser = argparse.ArgumentParser(
+        description="Shrink long silences (across all tracks) in a MIDI file."
+    )
     parser.add_argument("input_mid", help="输入 MIDI 文件 (.mid)")
     parser.add_argument("output_mid", help="输出 MIDI 文件 (.mid)")
-    parser.add_argument("--max_silence", "-m", type=float, required=True, help="允许的最大静音长度（秒），超过则压缩到此长度")
+    parser.add_argument(
+        "--max_silence",
+        "-m",
+        type=float,
+        required=True,
+        help="允许的最大静音长度（秒），超过则压缩到此长度",
+    )
     args = parser.parse_args()
 
     mid = mido.MidiFile(args.input_mid)
-    print(f"读取 MIDI：{args.input_mid}  ticks_per_beat={mid.ticks_per_beat}, tracks={len(mid.tracks)}")
+    print(
+        f"读取 MIDI：{args.input_mid}  ticks_per_beat={mid.ticks_per_beat}, tracks={len(mid.tracks)}"
+    )
 
     messages_by_track, all_note_msgs, tempo_changes = collect_events(mid)
-    note_events_sec = compute_seconds_for_events(messages_by_track, tempo_changes, mid.ticks_per_beat)
+    note_events_sec = compute_seconds_for_events(
+        messages_by_track, tempo_changes, mid.ticks_per_beat
+    )
 
     intervals = find_silence_intervals(note_events_sec, mid.ticks_per_beat)
     if not intervals:
@@ -266,18 +297,25 @@ def main():
 
     intervals_to_shrink = compute_intervals_to_shrink(intervals, args.max_silence)
     # 过滤出需要实际压缩的区间（shrink_ticks > 0）
-    to_actually_shrink = [it for it in intervals_to_shrink if it['shrink_ticks'] > 0]
+    to_actually_shrink = [it for it in intervals_to_shrink if it["shrink_ticks"] > 0]
     if not to_actually_shrink:
         print("所有静音区间都不超过给定最大静音长度，未修改。")
         return
 
-    total_shrunk, used_intervals = rebuild_midi(mid, messages_by_track, to_actually_shrink, args.output_mid)
+    total_shrunk, used_intervals = rebuild_midi(
+        mid, messages_by_track, to_actually_shrink, args.output_mid
+    )
 
     print(f"完成。写入：{args.output_mid}")
-    print(f"共压缩 {len(used_intervals)} 段静音，总共减少 {total_shrunk} ticks（tick数会随文件 tempo/ticks_per_beat 不同而意义不同）。")
+    print(
+        f"共压缩 {len(used_intervals)} 段静音，总共减少 {total_shrunk} ticks（tick数会随文件 tempo/ticks_per_beat 不同而意义不同）。"
+    )
     print("已压缩区间（原始 ticks -> 新 ticks, 原始秒 -> 新秒 ≈ max_silence）：")
     for it in used_intervals:
-        print(f"  ticks {it['start_tick']} -> {it['end_tick']}  : {it['orig_ticks']} -> {it['new_ticks']}, secs {it['duration_sec']:.3f} -> {it['r']*it['duration_sec']:.3f}")
+        print(
+            f"  ticks {it['start_tick']} -> {it['end_tick']}  : {it['orig_ticks']} -> {it['new_ticks']}, secs {it['duration_sec']:.3f} -> {it['r']*it['duration_sec']:.3f}"
+        )
+
 
 if __name__ == "__main__":
     main()

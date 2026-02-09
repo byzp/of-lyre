@@ -2,6 +2,7 @@
 mido.MidiFile -> 时间事件列表, MIDI note_on/note_off -> Windows 键盘事件（使用 SendInput，提高同时性与精度）。
 stop flag 控制可被 GUI 的停止按钮触发。
 """
+
 import os
 import time
 import threading
@@ -16,9 +17,10 @@ _WHITE_OFFSETS = {0, 2, 4, 5, 7, 9, 11}
 
 # mapping characters for the three rows (each row 7 keys)
 # _ROW0 = list("ZXCVBNM")   # chords 'C', 'Dm', 'Em', 'F', 'G', 'Am', 'G7'
-_ROW1 = list("ASDFGHJ")   # lowest 7 (starting at C3)
-_ROW2 = list("QWERTYU")   # middle 7
-_ROW3 = list("1234567")   # highest 7
+_ROW1 = list("ASDFGHJ")  # lowest 7 (starting at C3)
+_ROW2 = list("QWERTYU")  # middle 7
+_ROW3 = list("1234567")  # highest 7
+
 
 # Build mapping from MIDI note number (48..83 white keys) to characters
 def build_note_to_char_map() -> dict:
@@ -33,10 +35,11 @@ def build_note_to_char_map() -> dict:
             mapping[note] = ch
     return mapping
 
+
 if os.path.exists("key.txt"):
     mapping = {}
-    with open("key.txt", 'r') as f:
-        rows = list(f.read().replace("\n" ,""))
+    with open("key.txt", "r") as f:
+        rows = list(f.read().replace("\n", ""))
     notes = [n for n in range(48, 84) if (n % 12) in _WHITE_OFFSETS]
     for note, ch in zip(notes, rows):
         mapping[note] = ch
@@ -47,6 +50,7 @@ else:
 # ---- Windows SendInput wrapper (ctypes) for high-precision simultaneous input ----
 PUL = ctypes.POINTER(ctypes.c_ulong)
 
+
 class KeyBdInput(ctypes.Structure):
     _fields_ = [
         ("wVk", ctypes.c_ushort),
@@ -56,12 +60,14 @@ class KeyBdInput(ctypes.Structure):
         ("dwExtraInfo", PUL),
     ]
 
+
 class HardwareInput(ctypes.Structure):
     _fields_ = [
         ("uMsg", ctypes.c_ulong),
         ("wParamL", ctypes.c_short),
         ("wParamH", ctypes.c_ushort),
     ]
+
 
 class MouseInput(ctypes.Structure):
     _fields_ = [
@@ -73,11 +79,14 @@ class MouseInput(ctypes.Structure):
         ("dwExtraInfo", PUL),
     ]
 
+
 class Input_I(ctypes.Union):
     _fields_ = [("ki", KeyBdInput), ("mi", MouseInput), ("hi", HardwareInput)]
 
+
 class Input(ctypes.Structure):
     _fields_ = [("type", ctypes.c_ulong), ("ii", Input_I)]
+
 
 # constants
 INPUT_KEYBOARD = 1
@@ -89,7 +98,8 @@ _set_priority_class = ctypes.windll.kernel32.SetPriorityClass
 _get_current_thread = ctypes.windll.kernel32.GetCurrentThread
 _set_thread_priority = ctypes.windll.kernel32.SetThreadPriority
 
-def _make_key_input(vk: int, is_up: bool=False) -> Input:
+
+def _make_key_input(vk: int, is_up: bool = False) -> Input:
     ki = KeyBdInput()
     ki.wVk = vk
     ki.wScan = 0
@@ -104,12 +114,14 @@ def _make_key_input(vk: int, is_up: bool=False) -> Input:
     inp.ii = ii
     return inp
 
+
 def send_inputs(inputs: List[Input]) -> int:
     n = len(inputs)
     arr_type = Input * n
     arr = arr_type(*inputs)
     res = _sendinput(n, ctypes.byref(arr), ctypes.sizeof(Input))
     return res
+
 
 # helper: get virtual-key for a character
 def vk_for_char(ch: str) -> int:
@@ -118,6 +130,7 @@ def vk_for_char(ch: str) -> int:
     # Uppercase for letters; digits also map to ord('0')..ord('9') which are VK codes
     return ord(ch.upper())
 
+
 def press_key(ch: str):
     vk = vk_for_char(ch)
     if vk == 0:
@@ -125,12 +138,14 @@ def press_key(ch: str):
     inp = _make_key_input(vk, is_up=False)
     send_inputs([inp])
 
+
 def release_key(ch: str):
     vk = vk_for_char(ch)
     if vk == 0:
         return
     inp = _make_key_input(vk, is_up=True)
     send_inputs([inp])
+
 
 def press_keys_simultaneous(chars: List[str]):
     inputs = []
@@ -141,6 +156,7 @@ def press_keys_simultaneous(chars: List[str]):
     if inputs:
         send_inputs(inputs)
 
+
 def release_keys_simultaneous(chars: List[str]):
     inputs = []
     for ch in chars:
@@ -150,14 +166,14 @@ def release_keys_simultaneous(chars: List[str]):
     if inputs:
         send_inputs(inputs)
 
+
 # Convert MidiFile -> list of events with absolute time (seconds)
 # Each event: (abs_time_seconds, type_str, note, velocity)
 # type_str: 'on' or 'off'
 
+
 def midi_to_events(
-    mid: MidiFile, 
-    min_time: Optional[float] = None, 
-    max_time: Optional[float] = None
+    mid: MidiFile, min_time: Optional[float] = None, max_time: Optional[float] = None
 ) -> List[Tuple[float, str, int, int]]:
     events = []
     ticks_per_beat = mid.ticks_per_beat
@@ -171,20 +187,20 @@ def midi_to_events(
             dt = tick2second(msg.time, ticks_per_beat, current_tempo)
             abs_time += dt
         # tempo changes
-        if msg.type == 'set_tempo':
+        if msg.type == "set_tempo":
             current_tempo = msg.tempo
             continue
         if min_time is not None and abs_time < min_time:
             continue
-        if msg.type == 'note_on':
+        if msg.type == "note_on":
             if 48 <= msg.note <= 83:
                 if msg.velocity == 0:
-                    events.append((abs_time, 'off', msg.note, 0))
+                    events.append((abs_time, "off", msg.note, 0))
                 else:
-                    events.append((abs_time, 'on', msg.note, msg.velocity))
-        elif msg.type == 'note_off':
+                    events.append((abs_time, "on", msg.note, msg.velocity))
+        elif msg.type == "note_off":
             if 48 <= msg.note <= 83:
-                events.append((abs_time, 'off', msg.note, msg.velocity))
+                events.append((abs_time, "off", msg.note, msg.velocity))
         if max_time is not None and abs_time > max_time:
             break
     if min_time is not None:
@@ -196,13 +212,15 @@ def midi_to_events(
 
 
 # Play events: send keyboard presses/releases according to event times
-def play_events(events: List[Tuple[float, str, int, int]],
-                stop_flag: threading.Event,
-                progress_callback=None,
-                spin_threshold: float = 0.005,
-                sleep_chunk: float = 0.01,
-                progress_interval: float = 0.05,
-                raise_priority: bool = True):
+def play_events(
+    events: List[Tuple[float, str, int, int]],
+    stop_flag: threading.Event,
+    progress_callback=None,
+    spin_threshold: float = 0.005,
+    sleep_chunk: float = 0.01,
+    progress_interval: float = 0.05,
+    raise_priority: bool = True,
+):
     """
     events: list of (time, 'on'/'off', note, velocity) sorted by time
     stop_flag: threading.Event() - when set, function should stop ASAP (release all keys)
@@ -244,12 +262,12 @@ def play_events(events: List[Tuple[float, str, int, int]],
 
     # base time zero
     # base_time_zero = groups[0][0]  # usually 0
-    base_time_zero = 0 # Ensure ensemble synchronization
+    base_time_zero = 0  # Ensure ensemble synchronization
     start_wall = time.perf_counter()
 
     last_progress_time = start_wall
 
-    for (event_time, evlist) in groups:
+    for event_time, evlist in groups:
         if stop_flag.is_set():
             break
 
@@ -289,12 +307,12 @@ def play_events(events: List[Tuple[float, str, int, int]],
             break
 
         # For this timestamp: first OFF events, then ON events
-        offs = [e for e in evlist if e[1] == 'off']
-        ons  = [e for e in evlist if e[1] == 'on']
+        offs = [e for e in evlist if e[1] == "off"]
+        ons = [e for e in evlist if e[1] == "on"]
 
         # Process offs: release keys that correspond
         chars_to_release = []
-        for (_, _, note, _) in offs:
+        for _, _, note, _ in offs:
             ch = _NOTE_TO_CHAR.get(note)
             if ch is None:
                 continue
@@ -307,7 +325,7 @@ def play_events(events: List[Tuple[float, str, int, int]],
 
         # Process ons: determine chars to press
         chars_to_press = []
-        for (_, _, note, _) in ons:
+        for _, _, note, _ in ons:
             ch = _NOTE_TO_CHAR.get(note)
             if ch is None:
                 continue
@@ -332,6 +350,7 @@ def play_events(events: List[Tuple[float, str, int, int]],
         release_keys_simultaneous(list(pressed_chars))
         pressed_chars.clear()
 
+
 # Simple helper to get total duration (seconds) of a MidiFile
 def midi_total_length(mid: MidiFile) -> float:
     # compute by converting merged track times with tempo updates
@@ -342,9 +361,10 @@ def midi_total_length(mid: MidiFile) -> float:
     for msg in merged:
         if msg.time:
             total += tick2second(msg.time, ticks_per_beat, current_tempo)
-        if msg.type == 'set_tempo':
+        if msg.type == "set_tempo":
             current_tempo = msg.tempo
     return total
+
 
 # Stop function: set the event
 def stop(stop_flag: threading.Event):

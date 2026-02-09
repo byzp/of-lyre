@@ -1,5 +1,6 @@
 import mido
 
+
 def humanize_midi(input_file: str, output_file: str, step: int = 1):
     """
     读取 MIDI 文件，将同时起始的音符错开一点点时间（step ticks）。
@@ -24,7 +25,12 @@ def humanize_midi(input_file: str, output_file: str, step: int = 1):
                 # 找所有同一时间的 note_on
                 j = i + 1
                 group = [(i, msg)]
-                while j < len(events) and events[j][0] == t and events[j][1].type == "note_on" and events[j][1].velocity > 0:
+                while (
+                    j < len(events)
+                    and events[j][0] == t
+                    and events[j][1].type == "note_on"
+                    and events[j][1].velocity > 0
+                ):
                     group.append((j, events[j][1]))
                     j += 1
                 # 给这一组错开

@@ -2,6 +2,7 @@ import mido
 import sys
 import os
 
+
 def transpose_midi(input_file, output_file, semitone_shift):
     # 读取MIDI文件
     mid = mido.MidiFile(input_file)
@@ -11,7 +12,7 @@ def transpose_midi(input_file, output_file, semitone_shift):
         new_track = mido.MidiTrack()
         for msg in track:
             # 只处理 note_on 和 note_off
-            if msg.type in ['note_on', 'note_off']:
+            if msg.type in ["note_on", "note_off"]:
                 new_note = msg.note + semitone_shift
                 # 限制音符在0~127范围内
                 new_note = max(0, min(127, new_note))
@@ -24,6 +25,7 @@ def transpose_midi(input_file, output_file, semitone_shift):
     # 保存移调后的MIDI文件
     new_mid.save(output_file)
     print(f"已保存移调后的MIDI: {output_file}")
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:

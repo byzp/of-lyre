@@ -12,7 +12,7 @@ import librosa
 import mido
 import requests
 from fastapi import FastAPI, Query, HTTPException
-from fastapi.responses import StreamingResponse,Response
+from fastapi.responses import StreamingResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from pydub import AudioSegment
@@ -24,8 +24,8 @@ import io
 import numpy as np
 from pydub import AudioSegment
 
-NOTE_NAME_RE = re.compile(r'([A-Ga-g])(#|b)?(\d+)')
-NOTE_TO_SEMITONE = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
+NOTE_NAME_RE = re.compile(r"([A-Ga-g])(#|b)?(\d+)")
+NOTE_TO_SEMITONE = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 
 # 全局 samples 缓存： samples_dir -> { midi_num: (y: np.ndarray, sr: int) }
 SAMPLES_CACHE: Dict[str, Dict[int, Tuple[np.ndarray, int]]] = {}
@@ -40,21 +40,28 @@ def note_name_to_midi(note_name: str) -> int:
     letter, acc, octave = m.groups()
     letter = letter.upper()
     sem = NOTE_TO_SEMITONE[letter]
-    if acc == '#':
+    if acc == "#":
         sem += 1
-    elif acc == 'b':
+    elif acc == "b":
         sem -= 1
     octave = int(octave)
     return (octave + 1) * 12 + sem
 
+
 def is_white_key(midi_note: int) -> bool:
     return (midi_note % 12) in {0, 2, 4, 5, 7, 9, 11}
 
+
 def list_sample_files(samples_dir: str) -> List[str]:
     try:
-        return [f for f in os.listdir(samples_dir) if os.path.isfile(os.path.join(samples_dir, f))]
+        return [
+            f
+            for f in os.listdir(samples_dir)
+            if os.path.isfile(os.path.join(samples_dir, f))
+        ]
     except Exception as e:
         raise RuntimeError(f"cannot list samples_dir: {e}")
+
 
 def load_and_prepare_sample(path: str, out_sr: int) -> Tuple[np.ndarray, int]:
     """
@@ -66,7 +73,10 @@ def load_and_prepare_sample(path: str, out_sr: int) -> Tuple[np.ndarray, int]:
     y = y.astype(np.float32)
     return y, out_sr
 
-def preload_samples_dir(samples_dir: str, out_sr: int = 22050) -> Dict[int, Tuple[np.ndarray, int]]:
+
+def preload_samples_dir(
+    samples_dir: str, out_sr: int = 22050
+) -> Dict[int, Tuple[np.ndarray, int]]:
     """
     将 samples_dir 中的样本一次性读入内存并缓存，返回 midi->(y,sr) 的映射。
     线程安全：并发请求时只会加载一次。
@@ -125,6 +135,7 @@ def parse_midi_file(midi_bytes: bytes) -> list:
             events.append((abs_time, msg.note, 0, "off"))
     return sorted(events, key=lambda x: x[0])
 
+
 def events_to_notes(note_events: list) -> list:
     """
     把 note on/off 事件配对成 notes 列表：(start_time, duration, pitch, velocity)
@@ -148,7 +159,9 @@ def events_to_notes(note_events: list) -> list:
     return sorted(notes, key=lambda x: x[0])
 
 
-def find_best_transpose(notes: list, sample_midis: List[int], search_range=range(-24, 25)):
+def find_best_transpose(
+    notes: list, sample_midis: List[int], search_range=range(-24, 25)
+):
     """
     寻找一个整体转调，使得尽可能多的音符落在 samples 可用范围内且为白键。
     返回 (best_transpose, count)
@@ -168,6 +181,7 @@ def find_best_transpose(notes: list, sample_midis: List[int], search_range=range
             best_t = t
     return best_t, best_cnt
 
+
 def pitch_shift_audio(y: np.ndarray, sr: int, semitones: float) -> np.ndarray:
     """对单通道信号做半音变化（librosa）"""
     if abs(semitones) < 1e-9:
@@ -178,7 +192,10 @@ def pitch_shift_audio(y: np.ndarray, sr: int, semitones: float) -> np.ndarray:
         # 兼容历史参数名
         return librosa.effects.pitch_shift(y, sr, semitones)
 
-def trim_silence(audio: np.ndarray, threshold: float = 0.01, chunk_size: int = 1024) -> np.ndarray:
+
+def trim_silence(
+    audio: np.ndarray, threshold: float = 0.01, chunk_size: int = 1024
+) -> np.ndarray:
     """简单的前后静音裁剪（基于绝对值阈值）"""
     if audio.ndim == 1:
         abs_audio = np.abs(audio)
@@ -187,18 +204,27 @@ def trim_silence(audio: np.ndarray, threshold: float = 0.01, chunk_size: int = 1
     start = 0
     end = len(audio)
     for i in range(0, len(abs_audio), chunk_size):
-        if np.max(abs_audio[i:i+chunk_size]) >= threshold:
+        if np.max(abs_audio[i : i + chunk_size]) >= threshold:
             start = i
             break
     for i in range(len(abs_audio), 0, -chunk_size):
-        if np.max(abs_audio[max(0, i-chunk_size):i]) >= threshold:
+        if np.max(abs_audio[max(0, i - chunk_size) : i]) >= threshold:
             end = i
             break
     return audio[start:end]
 
-def synthesize(notes, samples_mem: Dict[int, Tuple[np.ndarray,int]],
-               black_policy='up', auto_octave=False, out_sr=22050,
-               manual_offset=0, duration_scale=1.0, clean=False, auto_transpose=True):
+
+def synthesize(
+    notes,
+    samples_mem: Dict[int, Tuple[np.ndarray, int]],
+    black_policy="up",
+    auto_octave=False,
+    out_sr=22050,
+    manual_offset=0,
+    duration_scale=1.0,
+    clean=False,
+    auto_transpose=True,
+):
     """
     用已经预加载到内存的 samples (samples_mem) 做采样合成。
     samples_mem: midi_num -> (y, sr) （y 已经为 out_sr, mono）
@@ -223,11 +249,11 @@ def synthesize(notes, samples_mem: Dict[int, Tuple[np.ndarray,int]],
         scaled_dur = max(0.01, dur * duration_scale)
         p = pitch + total_transpose
         if not is_white_key(p):
-            if black_policy == 'ignore':
+            if black_policy == "ignore":
                 continue
-            elif black_policy == 'up':
+            elif black_policy == "up":
                 p += 1
-            elif black_policy == 'down':
+            elif black_policy == "down":
                 p -= 1
         if auto_octave:
             while p < sample_min:
@@ -282,18 +308,20 @@ def synthesize(notes, samples_mem: Dict[int, Tuple[np.ndarray,int]],
         # 如果 sample 长度比目标 duration 长，保留一部分尾音作为 release
         if len(y_shifted) > needed_len:
             tail_keep = min(max_extra_release, len(y_shifted) - needed_len)
-            y_use = y_shifted[:needed_len + tail_keep].astype(np.float32)
+            y_use = y_shifted[: needed_len + tail_keep].astype(np.float32)
         else:
             y_use = y_shifted.astype(np.float32)
 
         # 包络：简易线性淡入淡出
         env = np.ones(len(y_use), dtype=np.float32)
-        fade_in = min(fade_in, len(y_use)//2)
-        fade_out = min(fade_out, len(y_use)//2)
+        fade_in = min(fade_in, len(y_use) // 2)
+        fade_out = min(fade_out, len(y_use) // 2)
         if fade_in > 0:
             env[:fade_in] = np.linspace(0.0, 1.0, fade_in)
         if fade_out > 0:
-            env[-fade_out:] = np.minimum(env[-fade_out:], np.linspace(1.0, 0.0, fade_out))
+            env[-fade_out:] = np.minimum(
+                env[-fade_out:], np.linspace(1.0, 0.0, fade_out)
+            )
         y_use *= env
 
         # 按 velocity 缩放
@@ -303,7 +331,7 @@ def synthesize(notes, samples_mem: Dict[int, Tuple[np.ndarray,int]],
         start_idx = int(round(start_s * out_sr))
         end_idx = start_idx + len(y_use)
         if end_idx > len(mix):
-            mix = np.pad(mix, (0, end_idx - len(mix)), mode='constant')
+            mix = np.pad(mix, (0, end_idx - len(mix)), mode="constant")
         mix[start_idx:end_idx] += y_use
 
     # 简单归一化（避免裁剪）
@@ -316,6 +344,7 @@ def synthesize(notes, samples_mem: Dict[int, Tuple[np.ndarray,int]],
 
     return mix, out_sr
 
+
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -325,24 +354,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/wav")
-async def wav(request: Request,
-              hash: str = Query(...),
-              samples_dir: str = Query('./lyre/dict/8/'),
-              black_key_policy: str = Query('up', regex='^(up|down|ignore)$'),
-              auto_octave: bool = Query(False),
-              offset: int = Query(0),
-              duration_scale: float = Query(1.0),
-              sr: int = Query(22050),
-              clean: bool = Query(False)):
-    if not re.fullmatch(r'[0-9a-fA-F]{32}', hash):
+async def wav(
+    request: Request,
+    hash: str = Query(...),
+    samples_dir: str = Query("./lyre/dict/8/"),
+    black_key_policy: str = Query("up", regex="^(up|down|ignore)$"),
+    auto_octave: bool = Query(False),
+    offset: int = Query(0),
+    duration_scale: float = Query(1.0),
+    sr: int = Query(22050),
+    clean: bool = Query(False),
+):
+    if not re.fullmatch(r"[0-9a-fA-F]{32}", hash):
         raise HTTPException(status_code=400, detail="invalid hash")
     if duration_scale <= 0:
         raise HTTPException(status_code=400, detail="duration_scale must be > 0")
     if sr <= 0:
         raise HTTPException(status_code=400, detail="sr must be > 0")
 
-    url = f'http://127.0.0.1:1200/download?hash={hash}'
+    url = f"http://127.0.0.1:1200/download?hash={hash}"
     try:
         r = requests.get(url, timeout=10)
     except Exception as e:
@@ -378,7 +410,7 @@ async def wav(request: Request,
             manual_offset=offset,
             duration_scale=duration_scale,
             clean=clean,
-            auto_transpose=True
+            auto_transpose=True,
         )
     except HTTPException:
         raise
@@ -389,10 +421,7 @@ async def wav(request: Request,
         mix = np.clip(mix, -1.0, 1.0)
         mix_int16 = (mix * 32767.0).astype(np.int16)
         audio_seg = AudioSegment(
-            data=mix_int16.tobytes(),
-            sample_width=2,
-            frame_rate=out_sr,
-            channels=1
+            data=mix_int16.tobytes(), sample_width=2, frame_rate=out_sr, channels=1
         )
         buf = io.BytesIO()
         audio_seg.export(buf, format="mp3", bitrate="128")
@@ -442,12 +471,17 @@ async def wav(request: Request,
     def iter_range(data: bytes, s: int, e: int, chunk_size: int = 8192):
         idx = s
         while idx <= e:
-            yield data[idx:min(idx + chunk_size, e + 1)]
+            yield data[idx : min(idx + chunk_size, e + 1)]
             idx += chunk_size
 
     headers["Content-Range"] = f"bytes {start}-{end}/{total}"
     headers["Content-Length"] = str(chunk_length)
-    return StreamingResponse(iter_range(mp3_bytes, start, end), status_code=206, media_type="audio/mpeg", headers=headers)
+    return StreamingResponse(
+        iter_range(mp3_bytes, start, end),
+        status_code=206,
+        media_type="audio/mpeg",
+        headers=headers,
+    )
 
 
 if __name__ == "__main__":

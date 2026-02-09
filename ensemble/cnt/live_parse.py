@@ -34,9 +34,11 @@ def process_flow_buffer(flow_key, out_queue: Optional[Any] = None):
 
         # parse header length with protection
         try:
-            header_len = struct.unpack('>H', buf[0:2])[0]
+            header_len = struct.unpack(">H", buf[0:2])[0]
         except Exception as e:
-            logger.exception("Failed to unpack header length; dropping first byte to resync")
+            logger.exception(
+                "Failed to unpack header length; dropping first byte to resync"
+            )
             # drop one byte to try to resync stream
             try:
                 del buf[0]
@@ -49,17 +51,19 @@ def process_flow_buffer(flow_key, out_queue: Optional[Any] = None):
         if len(buf) < 2 + header_len:
             break
 
-        header_data = bytes(buf[2:2 + header_len])
+        header_data = bytes(buf[2 : 2 + header_len])
         packet_head = OverField_pb2.PacketHead()
 
         # parse header proto safely
         try:
             packet_head.ParseFromString(header_data)
         except Exception as e:
-            logger.exception("Error parsing PacketHead; dropping first 2+header_len bytes to resync")
+            logger.exception(
+                "Error parsing PacketHead; dropping first 2+header_len bytes to resync"
+            )
             # If header parsing fails, drop the bytes we attempted to parse and continue
             try:
-                del buf[:2 + header_len]
+                del buf[: 2 + header_len]
             except Exception:
                 break
             continue
@@ -76,7 +80,9 @@ def process_flow_buffer(flow_key, out_queue: Optional[Any] = None):
             del buf[:total_needed]
         except Exception:
             # If deletion fails, avoid infinite loop
-            logger.exception("Failed to delete processed bytes from buffer; aborting processing loop")
+            logger.exception(
+                "Failed to delete processed bytes from buffer; aborting processing loop"
+            )
             break
 
         processed += 1
@@ -93,7 +99,7 @@ def process_flow_buffer(flow_key, out_queue: Optional[Any] = None):
         head_summary = {
             "msg_id": getattr(packet_head, "msg_id", None),
             "body_len": getattr(packet_head, "body_len", None),
-            "flag": getattr(packet_head, "flag", None)
+            "flag": getattr(packet_head, "flag", None),
         }
 
         if getattr(packet_head, "msg_id", None) == WATCH_MSG_ID:
@@ -101,7 +107,9 @@ def process_flow_buffer(flow_key, out_queue: Optional[Any] = None):
             try:
                 chat.ParseFromString(body_data)
             except Exception:
-                logger.exception("Failed to parse ChatMsgNotice body; skipping this chat packet")
+                logger.exception(
+                    "Failed to parse ChatMsgNotice body; skipping this chat packet"
+                )
                 continue
 
             item = {
@@ -109,11 +117,11 @@ def process_flow_buffer(flow_key, out_queue: Optional[Any] = None):
                 "flow": flow_key,
                 "packet_head": head_summary,
                 "chat_text": str(chat),
-                "raw_body": body_data
+                "raw_body": body_data,
             }
             try:
                 print(str(chat))
-                with open('log.txt', 'a') as file:
+                with open("log.txt", "a") as file:
                     file.write(str(chat))
             except Exception:
                 # printing shouldn't crash processing
@@ -131,17 +139,26 @@ def process_flow_buffer(flow_key, out_queue: Optional[Any] = None):
     return processed
 
 
-def pkt_callback(pkt, ip_filter, port_filter, out_queue: Optional[Any] = None, stop_event: Optional[threading.Event] = None):
+def pkt_callback(
+    pkt,
+    ip_filter,
+    port_filter,
+    out_queue: Optional[Any] = None,
+    stop_event: Optional[threading.Event] = None,
+):
     if stop_event is not None and stop_event.is_set():
         return False
     if not pkt.haslayer(Raw):
         return
-    ip_layer = pkt.getlayer('IP')
+    ip_layer = pkt.getlayer("IP")
     src_ip = ip_layer.src
     dst_ip = ip_layer.dst
     sport = getattr(pkt, "sport", None)
     dport = getattr(pkt, "dport", None)
-    if not ((src_ip == ip_filter or dst_ip == ip_filter) and (sport == port_filter or dport == port_filter)):
+    if not (
+        (src_ip == ip_filter or dst_ip == ip_filter)
+        and (sport == port_filter or dport == port_filter)
+    ):
         return
     payload = bytes(pkt[Raw].load)
     if len(payload) == 0:
@@ -153,19 +170,44 @@ def pkt_callback(pkt, ip_filter, port_filter, out_queue: Optional[Any] = None, s
     try:
         process_flow_buffer(flow_key, out_queue=out_queue)
     except Exception:
-        logger.exception("Unhandled exception in process_flow_buffer for flow %s", flow_key)
+        logger.exception(
+            "Unhandled exception in process_flow_buffer for flow %s", flow_key
+        )
 
 
-def start_sniffer(iface: str, ip: str, port: int, out_queue: Optional[Any] = None, bpf: Optional[str] = None, promisc: bool = False, stop_event: Optional[threading.Event] = None):
+def start_sniffer(
+    iface: str,
+    ip: str,
+    port: int,
+    out_queue: Optional[Any] = None,
+    bpf: Optional[str] = None,
+    promisc: bool = False,
+    stop_event: Optional[threading.Event] = None,
+):
     bpf_filter = f"tcp and host {ip} and port {port}"
     if bpf:
         bpf_filter = f"({bpf_filter}) and ({bpf})"
     conf.sniff_promisc = bool(promisc)
+
     def _stop_filter(pkt):
         return stop_event is not None and stop_event.is_set()
+
     def _prn_wrapper(pkt):
-        return pkt_callback(pkt, ip_filter=ip, port_filter=port, out_queue=out_queue, stop_event=stop_event)
-    sniff(iface=iface, filter=bpf_filter, prn=_prn_wrapper, store=0, stop_filter=_stop_filter)
+        return pkt_callback(
+            pkt,
+            ip_filter=ip,
+            port_filter=port,
+            out_queue=out_queue,
+            stop_event=stop_event,
+        )
+
+    sniff(
+        iface=iface,
+        filter=bpf_filter,
+        prn=_prn_wrapper,
+        store=0,
+        stop_filter=_stop_filter,
+    )
 
 
 def stop_sniffer(stop_event: threading.Event):
