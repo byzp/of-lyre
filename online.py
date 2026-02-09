@@ -1,6 +1,7 @@
 """
 midi下载界面。通过 gui 唤起
 """
+
 import threading
 import tempfile
 import os
@@ -8,25 +9,36 @@ import requests
 from urllib.parse import urljoin
 
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
-    QScrollArea, QWidget, QFileDialog, QMessageBox, QInputDialog, QSizePolicy
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QLineEdit,
+    QScrollArea,
+    QWidget,
+    QFileDialog,
+    QMessageBox,
+    QInputDialog,
+    QSizePolicy,
 )
 from PyQt5.QtCore import pyqtSignal, Qt, QUrl
 from PyQt5.QtGui import QDesktopServices
 
+
 class midiBrowser(QDialog):
-    songs_loaded = pyqtSignal(dict)          # emits the JSON from /latest_songs
-    operation_result = pyqtSignal(bool, str) # (success, message)
+    songs_loaded = pyqtSignal(dict)  # emits the JSON from /latest_songs
+    operation_result = pyqtSignal(bool, str)  # (success, message)
 
     def __init__(self, api_base_url="http://127.0.0.1:8000/", gui_object=None):
         super().__init__()
         self.setWindowTitle("Online MIDI Browser")
-        #self.setWindowFlags(Qt.Window)
+        # self.setWindowFlags(Qt.Window)
         self.resize(700, 500)
         self.api_base = api_base_url.rstrip("/") + "/"
         self.page = 1
         self.page_size = 20
-        self.gui_obj=gui_object
+        self.gui_obj = gui_object
 
         # Top: search + refresh
         top_layout = QHBoxLayout()
@@ -90,7 +102,9 @@ class midiBrowser(QDialog):
     def _worker_load_latest(self):
         try:
             url = urljoin(self.api_base, "latest_songs")
-            resp = requests.get(url, params={"page": self.page, "page_size": self.page_size}, timeout=20)
+            resp = requests.get(
+                url, params={"page": self.page, "page_size": self.page_size}, timeout=20
+            )
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
@@ -110,7 +124,9 @@ class midiBrowser(QDialog):
     def _worker_download(self, hash_val, save_path, open_after=False):
         try:
             url = urljoin(self.api_base, "download")
-            with requests.get(url, params={"hash": hash_val}, stream=True, timeout=5) as r:
+            with requests.get(
+                url, params={"hash": hash_val}, stream=True, timeout=5
+            ) as r:
                 r.raise_for_status()
                 # total = r.headers.get("Content-Length")
                 with open(save_path, "wb") as f:
@@ -131,7 +147,9 @@ class midiBrowser(QDialog):
     def _worker_delete(self, hash_val, password):
         try:
             url = urljoin(self.api_base, "delete")
-            resp = requests.post(url, data={"hash": hash_val, "delete_password": password}, timeout=20)
+            resp = requests.post(
+                url, data={"hash": hash_val, "delete_password": password}, timeout=20
+            )
             resp.raise_for_status()
             data = resp.json()
             succeed = data.get("succeed", False)
@@ -178,7 +196,12 @@ class midiBrowser(QDialog):
         self.load_latest()
 
     def on_upload(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select MIDI file to upload", "", "MIDI files (*.mid *.midi);;All files (*)")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select MIDI file to upload",
+            "",
+            "MIDI files (*.mid *.midi);;All files (*)",
+        )
         if not file_path:
             return
         try:
@@ -191,13 +214,24 @@ class midiBrowser(QDialog):
             QMessageBox.warning(self, "Too large", "File exceeds 1MB maximum.")
             return
         # ask for upload_by and delete_password
-        upload_by, ok1 = QInputDialog.getText(self, "Upload by", "Uploaded by (your name):")
+        upload_by, ok1 = QInputDialog.getText(
+            self, "Upload by", "Uploaded by (your name):"
+        )
         if not ok1:
             return
-        delete_password, ok2 = QInputDialog.getText(self, "Delete password", "Delete password (will be required to delete):", echo=QLineEdit.Password)
+        delete_password, ok2 = QInputDialog.getText(
+            self,
+            "Delete password",
+            "Delete password (will be required to delete):",
+            echo=QLineEdit.Password,
+        )
         if not ok2:
             return
-        threading.Thread(target=self._worker_upload, args=(file_path, upload_by, delete_password), daemon=True).start()
+        threading.Thread(
+            target=self._worker_upload,
+            args=(file_path, upload_by, delete_password),
+            daemon=True,
+        ).start()
 
     # signal handlers
     def _on_songs_loaded(self, data):
@@ -242,9 +276,17 @@ class midiBrowser(QDialog):
 
         for entry in items:
             # expected fields: name, hash, maybe uploader, duration, etc.
-            name = entry.get("name") or entry.get("title") or entry.get("filename") or "<unnamed>"
-            hash_val = entry.get("hash") or entry.get("id") or entry.get("file_hash") or ""
-            meta_text = f"{name}\n(up: {upload_by})" #"{name}  (hash: {hash_val})"
+            name = (
+                entry.get("name")
+                or entry.get("title")
+                or entry.get("filename")
+                or "<unnamed>"
+            )
+            hash_val = (
+                entry.get("hash") or entry.get("id") or entry.get("file_hash") or ""
+            )
+            upload_by = entry.get("upload_by")
+            meta_text = f"{name}\n(up: {upload_by})"  # "{name}  (hash: {hash_val})"
             row = QWidget()
             row_layout = QHBoxLayout()
             lbl = QLabel(meta_text)
@@ -256,9 +298,15 @@ class midiBrowser(QDialog):
             del_btn = QPushButton("Delete")
 
             # wire up callbacks with lambdas capturing hash_val and name
-            load_btn.clicked.connect(lambda checked, h=hash_val, n=name: self.load_item(h, n))
-            dl_btn.clicked.connect(lambda checked, h=hash_val, n=name: self.download_item(h, n))
-            del_btn.clicked.connect(lambda checked, h=hash_val, n=name: self.delete_item(h, n))
+            load_btn.clicked.connect(
+                lambda checked, h=hash_val, n=name: self.load_item(h, n)
+            )
+            dl_btn.clicked.connect(
+                lambda checked, h=hash_val, n=name: self.download_item(h, n)
+            )
+            del_btn.clicked.connect(
+                lambda checked, h=hash_val, n=name: self.delete_item(h, n)
+            )
 
             row_layout.addWidget(load_btn)
             row_layout.addWidget(dl_btn)
@@ -267,7 +315,7 @@ class midiBrowser(QDialog):
             self.list_layout.addWidget(row)
 
     def _on_operation_result(self, success, message):
-        #title = "Success" if success else "Error"
+        # title = "Success" if success else "Error"
         if not success:
             title = "Error"
             QMessageBox.information(self, title, message)
@@ -276,10 +324,17 @@ class midiBrowser(QDialog):
     def download_item(self, hash_val, name):
         # ask user for save file path
         suggested = f"{name}.mid" if name else f"{hash_val}.mid"
-        save_path  , _ = QFileDialog.getSaveFileName(self, "Save MIDI file", suggested, "MIDI files (*.mid *.midi);;All files (*)")
+        save_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save MIDI file",
+            suggested,
+            "MIDI files (*.mid *.midi);;All files (*)",
+        )
         if not save_path:
             return
-        threading.Thread(target=self._worker_download, args=(hash_val, save_path, False), daemon=True).start()
+        threading.Thread(
+            target=self._worker_download, args=(hash_val, save_path, False), daemon=True
+        ).start()
 
     def load_item(self, hash_val, name):
         # download to tmp and load
@@ -289,11 +344,17 @@ class midiBrowser(QDialog):
         # if not success -> _worker_download() -> _on_operation_result()
         if self._worker_download(hash_val, tmp_path):
             self.gui_obj.load_midi(tmp_path)
-        
 
     def delete_item(self, hash_val, name):
         # ask password
-        pwd, ok = QInputDialog.getText(self, "Delete confirmation", f"Enter delete password for:\n{name}", echo=QLineEdit.Password)
+        pwd, ok = QInputDialog.getText(
+            self,
+            "Delete confirmation",
+            f"Enter delete password for:\n{name}",
+            echo=QLineEdit.Password,
+        )
         if not ok:
             return
-        threading.Thread(target=self._worker_delete, args=(hash_val, pwd), daemon=True).start()
+        threading.Thread(
+            target=self._worker_delete, args=(hash_val, pwd), daemon=True
+        ).start()

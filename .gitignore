@@ -3,3 +3,4 @@
 /apk/.gradle
 /apk/build
 /apk/app/build
+__pycache__
