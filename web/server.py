@@ -16,7 +16,6 @@ import logging.config
 from rapidfuzz import fuzz, process
 import random
 
-
 # 自定义日志配置
 logging_config = {
     "version": 1,
@@ -208,7 +207,10 @@ def search_songs(name: str):
     if name == "*":
         while True:
             key = random.choice(list(songs_db.keys()))
-            if songs_db[key]["duration"] > 1000 * 60 * 10:
+            if (
+                songs_db[key]["duration"] > 1000 * 60 * 15
+                or songs_db[key]["file_size"] > 1024 * 128
+            ):
                 continue
             results = [
                 {k: v for k, v in songs_db[key].items() if k != "delete_password"}
@@ -374,7 +376,6 @@ async def upload_file(
         return JSONResponse(
             content={"succeed": False, "message": "文件大小超过了1MB的最大限制。"}
         )  # , status_code=400)
-
     # 计算文件哈希
     file_hash = hashlib.md5(file_data).hexdigest()
 
@@ -382,7 +383,10 @@ async def upload_file(
     if file_hash in songs_db:
         # raise HTTPException(status_code=400, detail="A file with the same hash already exists.")
         return JSONResponse(
-            content={"succeed": False, "message": "已存在相同哈希值的文件。"}
+            content={
+                "succeed": False,
+                "message": f"已存在相同文件: {songs_db[file_hash]['name']}",
+            }
         )  # , status_code=400)
 
     # 计算 MIDI 时长

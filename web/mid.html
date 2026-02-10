@@ -250,66 +250,10 @@
             font-weight: bold;
         }
 
-        /* 搜索结果表格列固定 */
-        #search_results .table-container table td:nth-child(1) {
-            width: 40%;
-            position: sticky;
-            left: 0;
-            background: var(--card-bg);
-            z-index: 5;
-        }
-
-        #search_results .table-container table td:nth-child(2) {
-            width: 15%;
-            position: sticky;
-            left: 40%;
-            background: var(--card-bg);
-            z-index: 5;
-        }
-
-        #search_results .table-container table td:nth-child(3) {
-            width: 25%;
-            position: sticky;
-            left: 55%;
-            background: var(--card-bg);
-            z-index: 5;
-        }
-
-        #search_results .table-container table td:nth-child(4) {
-            width: 20%;
-            position: sticky;
-            right: 0;
-            background: var(--card-bg);
-            z-index: 5;
-        }
-        
-        /* 搜索结果表格表头固定列 */
-        #search_results .table-container table th:nth-child(1) {
-            width: 40%;
-            position: sticky;
-            left: 0;
-            z-index: 5;
-        }
-
-        #search_results .table-container table th:nth-child(2) {
-            width: 15%;
-            position: sticky;
-            left: 40%;
-            z-index: 5;
-        }
-
-        #search_results .table-container table th:nth-child(3) {
-            width: 25%;
-            position: sticky;
-            left: 55%;
-            z-index: 5;
-        }
-
-        #search_results .table-container table th:nth-child(4) {
-            width: 20%;
-            position: sticky;
-            right: 0;
-            z-index: 5;
+        /* 搜索结果表格列样式（5列：名称、上传者、置信度、上传时间、操作） */
+        #search_results .table-container table th,
+        #search_results .table-container table td {
+            white-space: nowrap;
         }
 
         /* 操作按钮 */
@@ -1580,6 +1524,7 @@ const language = {
                         <thead>
                             <tr>
                                 <th data-key="name">名称</th>
+                                <th data-key="uploader">上传者</th>
                                 <th data-key="confidence">置信度</th>
                                 <th data-key="upload-time">上传时间</th>
                                 <th data-key="actions">操作</th>
@@ -1592,6 +1537,7 @@ const language = {
                     html += `
                         <tr>
                             <td>${utils.escapeHtml(song.name)}</td>
+                            <td>${utils.escapeHtml(song.upload_by || '')}</td>
                             <td>${song.confidence ? (song.confidence * 100).toFixed(1) + '%' : '-'}</td>
                             <td>${utils.formatUploadTime(song.upload_time)}</td>
                             <td>${songList.formatActions(song)}</td>
@@ -1606,6 +1552,9 @@ const language = {
                 `;
 
                 elements.searchResults.innerHTML = html;
+
+                // 更新搜索结果表格的语言
+                language.updateLanguage();
             } catch (err) {
                 console.error('搜索失败', err);
                 utils.showMessage('t-search-failed', 'error');

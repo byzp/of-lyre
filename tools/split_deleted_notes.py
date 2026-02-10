@@ -12,6 +12,7 @@ split_deleted_notes.py
     将 reduced.mid 作为主文件，找出 full.mid 中但不在 reduced.mid 中的 notes，
     并把这些被删除的 notes 按原 instrument（program/is_drum）放到新的 track 中。
 """
+
 import argparse
 import pretty_midi
 import copy
