@@ -36,13 +36,24 @@ def build_note_to_char_map() -> dict:
     return mapping
 
 
+_HAS_CUSTOM_MAPPING = False
+
 if os.path.exists("key.txt"):
+    _HAS_CUSTOM_MAPPING = True
     mapping = {}
-    with open("key.txt", "r") as f:
-        rows = list(f.read().replace("\n", ""))
-    notes = [n for n in range(48, 84) if (n % 12) in _WHITE_OFFSETS]
-    for note, ch in zip(notes, rows):
-        mapping[note] = ch
+    with open("key.txt", "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or ':' not in line:
+                continue
+            base_note_str, keys_str = line.split(':', 1)
+            try:
+                base_note = int(base_note_str)
+            except ValueError:
+                continue
+            for i, ch in enumerate(keys_str):
+                if ch != ' ':
+                    mapping[base_note + i] = ch
     _NOTE_TO_CHAR = mapping
 else:
     _NOTE_TO_CHAR = build_note_to_char_map()
@@ -98,6 +109,13 @@ _set_priority_class = ctypes.windll.kernel32.SetPriorityClass
 _get_current_thread = ctypes.windll.kernel32.GetCurrentThread
 _set_thread_priority = ctypes.windll.kernel32.SetThreadPriority
 
+# VkKeyScanEx: map a character to virtual-key code + shift state
+_vk_key_scan = ctypes.windll.user32.VkKeyScanExW
+_vk_key_scan.argtypes = [ctypes.c_wchar, ctypes.c_void_p]
+_vk_key_scan.restype = ctypes.c_short
+
+VK_SHIFT = 0x10
+
 
 def _make_key_input(vk: int, is_up: bool = False) -> Input:
     ki = KeyBdInput()
@@ -123,46 +141,39 @@ def send_inputs(inputs: List[Input]) -> int:
     return res
 
 
-# helper: get virtual-key for a character
-def vk_for_char(ch: str) -> int:
+# helper: get virtual-key and shift state for a character using VkKeyScanEx
+def _char_vk_info(ch: str) -> Tuple[int, bool]:
+    """Return (vk_code, needs_shift). Returns (0, False) if character has no valid mapping."""
     if not ch:
-        return 0
-    # Uppercase for letters; digits also map to ord('0')..ord('9') which are VK codes
-    return ord(ch.upper())
+        return 0, False
+    result = _vk_key_scan(ch, None)
+    vk = result & 0xFF
+    if vk == 0xFF:  # no keyboard mapping found
+        return 0, False
+    needs_shift = bool((result >> 8) & 0x1)
+    return vk, needs_shift
 
 
-def press_key(ch: str):
-    vk = vk_for_char(ch)
-    if vk == 0:
-        return
-    inp = _make_key_input(vk, is_up=False)
-    send_inputs([inp])
-
-
-def release_key(ch: str):
-    vk = vk_for_char(ch)
-    if vk == 0:
-        return
-    inp = _make_key_input(vk, is_up=True)
-    send_inputs([inp])
-
-
-def press_keys_simultaneous(chars: List[str]):
+def press_keys_simultaneous(chars: List[str], press_shift: bool = False):
     inputs = []
+    if press_shift:
+        inputs.append(_make_key_input(VK_SHIFT, is_up=False))
     for ch in chars:
-        vk = vk_for_char(ch)
+        vk, _ = _char_vk_info(ch)
         if vk:
             inputs.append(_make_key_input(vk, is_up=False))
     if inputs:
         send_inputs(inputs)
 
 
-def release_keys_simultaneous(chars: List[str]):
+def release_keys_simultaneous(chars: List[str], release_shift: bool = False):
     inputs = []
     for ch in chars:
-        vk = vk_for_char(ch)
+        vk, _ = _char_vk_info(ch)
         if vk:
             inputs.append(_make_key_input(vk, is_up=True))
+    if release_shift:
+        inputs.append(_make_key_input(VK_SHIFT, is_up=True))
     if inputs:
         send_inputs(inputs)
 
@@ -181,31 +192,61 @@ def midi_to_events(
     # merge all tracks into one stream
     merged = mido.merge_tracks(mid.tracks)
     abs_time = 0.0
+    # Track notes active before min_time so we can insert synthetic note_on at min_time
+    held_before = set()
+    crossed_min_time = False
+
+    def _is_mapped(note: int) -> bool:
+        if _HAS_CUSTOM_MAPPING:
+            return note in _NOTE_TO_CHAR
+        return 48 <= note <= 83
+
     for msg in merged:
         # msg.time is delta in ticks
         if msg.time:
             dt = tick2second(msg.time, ticks_per_beat, current_tempo)
             abs_time += dt
+
+        # Insert synthetic note_on for notes still held when crossing min_time
+        if min_time is not None and not crossed_min_time and abs_time >= min_time:
+            crossed_min_time = True
+            for note in held_before:
+                events.append((min_time, "on", note, 100))
+            held_before.clear()
+
         # tempo changes
         if msg.type == "set_tempo":
             current_tempo = msg.tempo
             continue
+
+        # Before min_time: only track held notes (don't emit events)
         if min_time is not None and abs_time < min_time:
+            if msg.type == "note_on":
+                if msg.velocity > 0 and _is_mapped(msg.note):
+                    held_before.add(msg.note)
+            elif msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0):
+                held_before.discard(msg.note)
             continue
+
         if msg.type == "note_on":
-            if 48 <= msg.note <= 83:
-                if msg.velocity == 0:
-                    events.append((abs_time, "off", msg.note, 0))
-                else:
-                    events.append((abs_time, "on", msg.note, msg.velocity))
+            if not _is_mapped(msg.note):
+                continue
+            if msg.velocity == 0:
+                events.append((abs_time, "off", msg.note, 0))
+            else:
+                events.append((abs_time, "on", msg.note, msg.velocity))
         elif msg.type == "note_off":
-            if 48 <= msg.note <= 83:
-                events.append((abs_time, "off", msg.note, msg.velocity))
+            if not _is_mapped(msg.note):
+                continue
+            events.append((abs_time, "off", msg.note, msg.velocity))
         if max_time is not None and abs_time > max_time:
             break
     if min_time is not None:
-        events = [e for e in events if e[0] >= min_time]
-    if max_time is not None:
+        # Shift timestamps so playback starts from 0, not from min_time
+        events = [(t - min_time, typ, note, vel) for t, typ, note, vel in events if t >= min_time]
+    if max_time is not None and min_time is not None:
+        events = [e for e in events if e[0] <= max_time - min_time]
+    elif max_time is not None:
         events = [e for e in events if e[0] <= max_time]
     events.sort(key=lambda x: x[0])
     return events
@@ -243,8 +284,9 @@ def play_events(
         except Exception:
             pass
 
-    # Track which characters are currently physically pressed
-    pressed_chars = set()
+    # Track which characters are currently physically pressed (char -> needs_shift)
+    pressed_chars: dict = {}
+    shift_held = False
 
     # Group events by their timestamp so that actions at the same timestamp are simultaneous
     groups = []
@@ -312,16 +354,21 @@ def play_events(
 
         # Process offs: release keys that correspond
         chars_to_release = []
+        any_released_needs_shift = False
         for _, _, note, _ in offs:
             ch = _NOTE_TO_CHAR.get(note)
             if ch is None:
                 continue
             if ch in pressed_chars:
                 chars_to_release.append(ch)
-                pressed_chars.discard(ch)
+                if pressed_chars.pop(ch):
+                    any_released_needs_shift = True
         if chars_to_release:
             # release simultaneously if multiple
-            release_keys_simultaneous(chars_to_release)
+            release_shift = any_released_needs_shift and not any(pressed_chars.values())
+            release_keys_simultaneous(chars_to_release, release_shift=release_shift)
+            if release_shift:
+                shift_held = False
 
         # Process ons: determine chars to press
         chars_to_press = []
@@ -334,20 +381,44 @@ def play_events(
         # If a requested char is already pressed: release it first (so retrigger)
         must_release_before_press = [ch for ch in chars_to_press if ch in pressed_chars]
         if must_release_before_press:
-            release_keys_simultaneous(must_release_before_press)
             for ch in must_release_before_press:
-                pressed_chars.discard(ch)
+                pressed_chars.pop(ch, None)
+            release_keys_simultaneous(must_release_before_press, release_shift=False)
+            # If no remaining pressed chars need Shift, release it and sync state
+            if shift_held and not any(pressed_chars.values()):
+                release_keys_simultaneous([], release_shift=True)
+                shift_held = False
 
-        # Press all requested chars simultaneously (single SendInput call)
+        # Press chars. When mixed (shifted + unshifted at same timestamp),
+        # drop black keys (shifted chars) to avoid Shift contamination.
         if chars_to_press:
-            press_keys_simultaneous(chars_to_press)
+            # Separate into shifted / unshifted; classify inline
+            chars_shifted = [ch for ch in chars_to_press if _char_vk_info(ch)[1]]
+            if chars_shifted and len(chars_shifted) < len(chars_to_press):
+                # Mixed group: drop black keys, keep only white keys
+                chars_to_press = [ch for ch in chars_to_press if ch not in chars_shifted]
+                chars_shifted = []
+
+            press_shift = False
+            if chars_shifted:
+                if not shift_held:
+                    press_shift = True
+            elif shift_held:
+                release_keys_simultaneous([], release_shift=True)
+                shift_held = False
+            press_keys_simultaneous(chars_to_press, press_shift=press_shift)
+            if press_shift:
+                shift_held = True
             for ch in chars_to_press:
-                pressed_chars.add(ch)
+                vk, ns = _char_vk_info(ch)
+                if vk:
+                    pressed_chars[ch] = ns
 
     # After events finished or stopped, release any held keys
     if pressed_chars:
         # release all at once
-        release_keys_simultaneous(list(pressed_chars))
+        release_shift = any(pressed_chars.values())
+        release_keys_simultaneous(list(pressed_chars.keys()), release_shift=release_shift)
         pressed_chars.clear()
 
 
