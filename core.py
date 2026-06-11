@@ -4,6 +4,7 @@ stop flag 控制可被 GUI 的停止按钮触发。
 """
 
 import os
+import sys
 import time
 import threading
 from typing import List, Tuple, Optional
@@ -38,21 +39,41 @@ def build_note_to_char_map() -> dict:
 
 _HAS_CUSTOM_MAPPING = False
 
-if os.path.exists("key.txt"):
+
+# Resolve key.txt path: look next to the executable (packaged) or script (dev)
+def _app_dir() -> str:
+    """Directory containing the executable or script."""
+    if getattr(sys, "frozen", False):
+        # PyInstaller / Nuitka: executable directory
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _find_key_txt() -> Optional[str]:
+    """Find key.txt: exe/script dir first, then cwd."""
+    for base in (_app_dir(), os.getcwd()):
+        path = os.path.join(base, "key.txt")
+        if os.path.exists(path):
+            return path
+    return None
+
+
+_key_path = _find_key_txt()
+if _key_path:
     _HAS_CUSTOM_MAPPING = True
     mapping = {}
-    with open("key.txt", "r", encoding="utf-8") as f:
+    with open(_key_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if not line or ':' not in line:
+            if not line or ":" not in line:
                 continue
-            base_note_str, keys_str = line.split(':', 1)
+            base_note_str, keys_str = line.split(":", 1)
             try:
                 base_note = int(base_note_str)
             except ValueError:
                 continue
             for i, ch in enumerate(keys_str):
-                if ch != ' ':
+                if ch != " ":
                     mapping[base_note + i] = ch
     _NOTE_TO_CHAR = mapping
 else:
@@ -224,7 +245,9 @@ def midi_to_events(
             if msg.type == "note_on":
                 if msg.velocity > 0 and _is_mapped(msg.note):
                     held_before.add(msg.note)
-            elif msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0):
+            elif msg.type == "note_off" or (
+                msg.type == "note_on" and msg.velocity == 0
+            ):
                 held_before.discard(msg.note)
             continue
 
@@ -243,7 +266,11 @@ def midi_to_events(
             break
     if min_time is not None:
         # Shift timestamps so playback starts from 0, not from min_time
-        events = [(t - min_time, typ, note, vel) for t, typ, note, vel in events if t >= min_time]
+        events = [
+            (t - min_time, typ, note, vel)
+            for t, typ, note, vel in events
+            if t >= min_time
+        ]
     if max_time is not None and min_time is not None:
         events = [e for e in events if e[0] <= max_time - min_time]
     elif max_time is not None:
@@ -396,7 +423,9 @@ def play_events(
             chars_shifted = [ch for ch in chars_to_press if _char_vk_info(ch)[1]]
             if chars_shifted and len(chars_shifted) < len(chars_to_press):
                 # Mixed group: drop black keys, keep only white keys
-                chars_to_press = [ch for ch in chars_to_press if ch not in chars_shifted]
+                chars_to_press = [
+                    ch for ch in chars_to_press if ch not in chars_shifted
+                ]
                 chars_shifted = []
 
             press_shift = False
@@ -418,7 +447,9 @@ def play_events(
     if pressed_chars:
         # release all at once
         release_shift = any(pressed_chars.values())
-        release_keys_simultaneous(list(pressed_chars.keys()), release_shift=release_shift)
+        release_keys_simultaneous(
+            list(pressed_chars.keys()), release_shift=release_shift
+        )
         pressed_chars.clear()
 
 

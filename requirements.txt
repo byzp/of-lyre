@@ -1,4 +1,5 @@
 pyqt5
 mido
 requests
+python-rtmidi
 #flask

@@ -4,3 +4,5 @@
 /apk/build
 /apk/app/build
 __pycache__
+/build
+/.vscode
