@@ -59,9 +59,15 @@ def _find_key_txt() -> Optional[str]:
 
 
 _key_path = _find_key_txt()
+
+# _NOTE_TO_CHAR: note -> character (for regular keys like 'q', '1', '!')
+# _NOTE_TO_VK:   note -> (vk_code, needs_shift) for raw-VK keys like {F1}
+_NOTE_TO_CHAR: dict = {}
+_NOTE_TO_VK: dict = {}
+_pressed_key_id: dict = {}  # note -> stable string key for pressed_chars tracking
+
 if _key_path:
     _HAS_CUSTOM_MAPPING = True
-    mapping = {}
     with open(_key_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -72,12 +78,50 @@ if _key_path:
                 base_note = int(base_note_str)
             except ValueError:
                 continue
-            for i, ch in enumerate(keys_str):
-                if ch != " ":
-                    mapping[base_note + i] = ch
-    _NOTE_TO_CHAR = mapping
+
+            note_idx = 0
+            pos = 0
+            while pos < len(keys_str):
+                ch = keys_str[pos]
+
+                if ch == "{" and (end := keys_str.find("}", pos + 1)) != -1:
+                    # {Fn} escape: function key VK code
+                    name = keys_str[pos + 1 : end]
+                    if name.startswith("F") and name[1:].isdigit():
+                        fn = int(name[1:])
+                        if 1 <= fn <= 24:
+                            n = base_note + note_idx
+                            vk = 0x6F + fn  # VK_F1 = 0x70 .. VK_F24 = 0x87
+                            _NOTE_TO_VK[n] = (vk, False)
+                            _pressed_key_id[n] = name
+                    pos = end + 1
+                    note_idx += 1
+                elif ch != " ":
+                    n = base_note + note_idx
+                    _NOTE_TO_CHAR[n] = ch
+                    _pressed_key_id[n] = ch
+                    pos += 1
+                    note_idx += 1
+                else:
+                    pos += 1
+                    note_idx += 1
 else:
     _NOTE_TO_CHAR = build_note_to_char_map()
+    for n in _NOTE_TO_CHAR:
+        _pressed_key_id[n] = _NOTE_TO_CHAR[n]
+
+
+def _note_info(note: int):
+    """Return (key_id, vk_code, needs_shift) for a MIDI note, or (None, 0, False)."""
+    ch = _NOTE_TO_CHAR.get(note)
+    if ch is not None:
+        vk, ns = _char_vk_info(ch)
+        return _pressed_key_id[note], vk, ns
+    entry = _NOTE_TO_VK.get(note)
+    if entry is not None:
+        return _pressed_key_id[note], entry[0], entry[1]
+    return None, 0, False
+
 
 # ---- Windows SendInput wrapper (ctypes) for high-precision simultaneous input ----
 PUL = ctypes.POINTER(ctypes.c_ulong)
@@ -175,12 +219,23 @@ def _char_vk_info(ch: str) -> Tuple[int, bool]:
     return vk, needs_shift
 
 
+def _resolve_key(key_id: str) -> Tuple[int, bool]:
+    """Resolve a key identifier (single char or Fn name) to (vk, needs_shift)."""
+    if len(key_id) == 1:
+        return _char_vk_info(key_id)
+    # Look up raw-VK entries by key_id
+    for note, (vk, ns) in _NOTE_TO_VK.items():
+        if _pressed_key_id.get(note) == key_id:
+            return vk, ns
+    return 0, False
+
+
 def press_keys_simultaneous(chars: List[str], press_shift: bool = False):
     inputs = []
     if press_shift:
         inputs.append(_make_key_input(VK_SHIFT, is_up=False))
-    for ch in chars:
-        vk, _ = _char_vk_info(ch)
+    for key_id in chars:
+        vk, _ = _resolve_key(key_id)
         if vk:
             inputs.append(_make_key_input(vk, is_up=False))
     if inputs:
@@ -189,8 +244,8 @@ def press_keys_simultaneous(chars: List[str], press_shift: bool = False):
 
 def release_keys_simultaneous(chars: List[str], release_shift: bool = False):
     inputs = []
-    for ch in chars:
-        vk, _ = _char_vk_info(ch)
+    for key_id in chars:
+        vk, _ = _resolve_key(key_id)
         if vk:
             inputs.append(_make_key_input(vk, is_up=True))
     if release_shift:
@@ -219,7 +274,7 @@ def midi_to_events(
 
     def _is_mapped(note: int) -> bool:
         if _HAS_CUSTOM_MAPPING:
-            return note in _NOTE_TO_CHAR
+            return note in _NOTE_TO_CHAR or note in _NOTE_TO_VK
         return 48 <= note <= 83
 
     for msg in merged:
@@ -383,12 +438,12 @@ def play_events(
         chars_to_release = []
         any_released_needs_shift = False
         for _, _, note, _ in offs:
-            ch = _NOTE_TO_CHAR.get(note)
-            if ch is None:
+            key_id, vk, ns = _note_info(note)
+            if key_id is None:
                 continue
-            if ch in pressed_chars:
-                chars_to_release.append(ch)
-                if pressed_chars.pop(ch):
+            if key_id in pressed_chars:
+                chars_to_release.append(key_id)
+                if pressed_chars.pop(key_id):
                     any_released_needs_shift = True
         if chars_to_release:
             # release simultaneously if multiple
@@ -397,16 +452,18 @@ def play_events(
             if release_shift:
                 shift_held = False
 
-        # Process ons: determine chars to press
-        chars_to_press = []
+        # Process ons: determine chars to press, tracking shift needs
+        chars_to_press: list = []  # list of (key_id, needs_shift)
         for _, _, note, _ in ons:
-            ch = _NOTE_TO_CHAR.get(note)
-            if ch is None:
+            key_id, vk, ns = _note_info(note)
+            if key_id is None:
                 continue
-            chars_to_press.append(ch)
+            chars_to_press.append((key_id, ns))
 
         # If a requested char is already pressed: release it first (so retrigger)
-        must_release_before_press = [ch for ch in chars_to_press if ch in pressed_chars]
+        must_release_before_press = [
+            ch for ch, _ in chars_to_press if ch in pressed_chars
+        ]
         if must_release_before_press:
             for ch in must_release_before_press:
                 pressed_chars.pop(ch, None)
@@ -419,12 +476,12 @@ def play_events(
         # Press chars. When mixed (shifted + unshifted at same timestamp),
         # drop black keys (shifted chars) to avoid Shift contamination.
         if chars_to_press:
-            # Separate into shifted / unshifted; classify inline
-            chars_shifted = [ch for ch in chars_to_press if _char_vk_info(ch)[1]]
+            # Separate into shifted / unshifted
+            chars_shifted = [ch for ch, ns in chars_to_press if ns]
             if chars_shifted and len(chars_shifted) < len(chars_to_press):
                 # Mixed group: drop black keys, keep only white keys
                 chars_to_press = [
-                    ch for ch in chars_to_press if ch not in chars_shifted
+                    (ch, ns) for ch, ns in chars_to_press if ch not in chars_shifted
                 ]
                 chars_shifted = []
 
@@ -435,13 +492,13 @@ def play_events(
             elif shift_held:
                 release_keys_simultaneous([], release_shift=True)
                 shift_held = False
-            press_keys_simultaneous(chars_to_press, press_shift=press_shift)
+            press_keys_simultaneous(
+                [ch for ch, _ in chars_to_press], press_shift=press_shift
+            )
             if press_shift:
                 shift_held = True
-            for ch in chars_to_press:
-                vk, ns = _char_vk_info(ch)
-                if vk:
-                    pressed_chars[ch] = ns
+            for ch, ns in chars_to_press:
+                pressed_chars[ch] = ns
 
     # After events finished or stopped, release any held keys
     if pressed_chars:
