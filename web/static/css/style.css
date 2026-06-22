@@ -1,0 +1,580 @@
+/* CSS 变量定义 */
+:root {
+    --primary-color: #4a90e2;
+    --bg-color: #f6f7fb;
+    --card-bg: #fff;
+    --border-color: #e9ecef;
+    --text-primary: #333;
+    --text-secondary: #666;
+    --shadow: 0 2px 6px rgba(0,0,0,0.1);
+    --border-radius: 6px;
+    --table-header-bg: #f0f0f0;
+}
+
+/* 全局样式 */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: var(--bg-color);
+    padding: 20px;
+    color: var(--text-primary);
+}
+
+/* 语言切换器 */
+.language-switcher {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    gap: 5px;
+}
+
+.language-switcher button {
+    padding: 6px 10px;
+    font-size: 12px;
+    border: 1px solid var(--border-color);
+    background: white;
+    color: #333;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.language-switcher button:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.language-switcher button.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.language-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    min-width: 120px;
+    display: none;
+    z-index: 1001;
+}
+
+.language-dropdown.show {
+    display: block;
+}
+
+.language-dropdown button {
+    width: 100%;
+    text-align: left;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    background: transparent;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+.language-dropdown button:last-child {
+    border-bottom: none;
+}
+
+/* 标签页容器 */
+.tab-container {
+    background: var(--card-bg);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* 标签页导航 */
+.tab-nav {
+    display: flex;
+    background: #f8f9fa;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tab-nav button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    color: var(--text-secondary);
+    margin-bottom: -1px;
+}
+
+.tab-nav button.active {
+    background: var(--card-bg);
+    border-bottom-color: var(--primary-color);
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+.tab-nav button:hover:not(.active) {
+    background: #e9ecef;
+}
+
+/* 标签页内容 */
+.tab-content {
+    padding: 20px;
+}
+
+/* 留言板标签页特殊样式 - 移除内边距限制 */
+.tab-content #comments {
+    padding: 0;
+}
+
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+/* 表单元素 */
+input, button {
+    padding: 8px 12px;
+    margin: 8px 0;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+button {
+    cursor: pointer;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    transition: background-color 0.3s ease;
+}
+
+button:hover {
+    background: #357abd;
+}
+
+/* 上传表单 */
+#upload-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
+
+/* 搜索标签页内容 */
+#search {
+    padding: 0;
+}
+
+/* 搜索区域 */
+#search-area {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    padding: 0 20px;
+    justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 搜索输入框拉伸 */
+#search-area input {
+    flex-grow: 1;
+    width: 100%;
+}
+
+/* 搜索按钮固定宽度 */
+#search-area button {
+    white-space: nowrap;
+    min-width: 60px;
+}
+
+/* 搜索结果 */
+#search_results {
+    margin: 0;
+    text-align: left;
+}
+
+/* 表格样式 */
+.table-container {
+    max-height: calc(100vh - 300px);
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    margin-top: 15px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 10px;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border-color);
+}
+
+th {
+    background: var(--table-header-bg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    font-weight: bold;
+}
+
+/* 搜索结果表格列样式（5列：名称、上传者、置信度、上传时间、操作） */
+#search_results .table-container table th,
+#search_results .table-container table td {
+    white-space: nowrap;
+}
+
+/* 操作按钮 */
+.actions {
+    display: flex;
+    gap: 5px;
+}
+
+.actions button {
+    padding: 4px 12px;
+    font-size: 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+/* 删除按钮样式 */
+.actions button:first-child {
+    background: #f44336;
+    color: white;
+}
+
+/* 播放按钮样式 */
+.actions button.play {
+    background: #2196F3;
+    color: white;
+}
+
+/* 下载按钮样式 */
+.actions button:last-child {
+    background: #4CAF50;
+    color: white;
+}
+
+/* 按钮悬停效果 */
+.actions button:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+/* 状态提示 */
+.small {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.loading-indicator, .end-indicator {
+    text-align: center;
+    padding: 10px;
+    font-size: 13px;
+}
+
+.loading-indicator {
+    color: var(--text-secondary);
+}
+
+/* 全局滚动条优化 */
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Firefox滚动条优化 */
+:root {
+    scrollbar-width: 12px;
+    scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+.end-indicator {
+    color: #999;
+}
+
+/* 留言板样式 */
+.comment-form {
+    width: 100%;
+    margin: 0 0 20px;
+    padding: 15px;
+    background: #f9f9f9;
+    border-radius: 8px;
+}
+
+.comment-form h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: var(--text-primary);
+}
+
+.comment-form input,
+.comment-form textarea {
+    width: 100%;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.comment-form textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.comment-form button {
+    width: 100%;
+    padding: 8px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.comment-form button:hover {
+    opacity: 0.9;
+}
+
+.comment-item {
+    width: 100%;
+    margin: 0 0 15px;
+    padding: 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: white;
+}
+
+.comment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.comment-author {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.comment-time {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.comment-content {
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+
+.comment-actions {
+    text-align: right;
+}
+
+.comment-actions button {
+    padding: 4px 12px;
+    font-size: 12px;
+    background: var(--danger-color, #f44336);
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.comment-actions button:hover {
+    opacity: 0.9;
+}
+
+/* 页脚 */
+footer {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* 音频播放器样式 */
+.audio-player {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    padding: 20px;
+    z-index: 1000;
+    min-width: 400px;
+    max-width: 600px;
+}
+
+.audio-player.active {
+    display: block;
+}
+
+.audio-player h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: var(--text-primary);
+}
+
+.player-controls {
+    margin-bottom: 15px;
+}
+
+.audio-player audio {
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.progress-container {
+    width: 100%;
+    height: 6px;
+    background: #ddd;
+    border-radius: 3px;
+    margin-bottom: 10px;
+    position: relative;
+    cursor: pointer;
+}
+
+.progress-bar {
+    height: 100%;
+    background: var(--primary-color);
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.1s ease-out;
+    position: relative;
+}
+
+.progress-bar.dragging {
+    transition: none;
+}
+
+.progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -6px;
+    transform: translateY(-50%);
+    width: 12px;
+    height: 12px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    cursor: grab;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.progress-bar:active::after {
+    cursor: grabbing;
+}
+
+.time-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 15px;
+}
+
+.player-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.player-actions button {
+    flex: 1;
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.close-button {
+    background: #f44336;
+    color: white;
+}
+
+.close-button:hover {
+    background: #d32f2f;
+}
+
+/* 背景遮罩 */
+.player-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 999;
+}
+
+.player-overlay.active {
+    display: block;
+}
+
+/* 等待提示样式 */
+.waiting-message {
+    text-align: center;
+    padding: 40px;
+}
+
+.waiting-message .spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid var(--primary-color);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 15px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

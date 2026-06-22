@@ -20,11 +20,11 @@ from mido import Message, MidiFile, tick2second
 
 from core import (
     _NOTE_TO_CHAR,
-    _char_vk_info,
+    _NOTE_TO_VK,
+    _note_info,
     press_keys_simultaneous,
     release_keys_simultaneous,
 )
-
 
 # ── state ────────────────────────────────────────────────────────────────────
 active_chars: dict = {}  # char -> needs_shift
@@ -37,26 +37,23 @@ lock = threading.Lock()
 # ── note handlers ────────────────────────────────────────────────────────────
 
 
-def _get_char(note: int):
-    """Return mapped character for MIDI note, or None if unmapped."""
-    return _NOTE_TO_CHAR.get(note)
+def _get_key_id(note: int):
+    """Return key identifier for MIDI note, or None if unmapped."""
+    key_id, _, _ = _note_info(note)
+    return key_id
 
 
 def handle_note_on(note: int, velocity: int):
     global shift_held
-    ch = _get_char(note)
-    if ch is None:
-        return
-
-    vk, needs_shift = _char_vk_info(ch)
-    if not vk:
+    key_id, vk, needs_shift = _note_info(note)
+    if key_id is None or not vk:
         return
 
     with lock:
-        # If this char is already pressed, release first (re-trigger)
-        if ch in active_chars:
-            release_keys_simultaneous([ch], release_shift=False)
-            del active_chars[ch]
+        # If this key is already pressed, release first (re-trigger)
+        if key_id in active_chars:
+            release_keys_simultaneous([key_id], release_shift=False)
+            del active_chars[key_id]
 
         # If sustain pedal is holding this note, clear sustained copy (live note takes over)
         sustained.pop(note, None)
@@ -74,31 +71,31 @@ def handle_note_on(note: int, velocity: int):
             # register as Shift+key → skip to avoid wrong note
             return
 
-        press_keys_simultaneous([ch], press_shift=press_shift)
+        press_keys_simultaneous([key_id], press_shift=press_shift)
         if press_shift:
             shift_held = True
-        active_chars[ch] = needs_shift
+        active_chars[key_id] = needs_shift
 
 
 def handle_note_off(note: int):
     global shift_held
-    ch = _get_char(note)
-    if ch is None:
+    key_id, _, _ = _note_info(note)
+    if key_id is None:
         return
 
     with lock:
         if sustain_on:
             # Sustain pedal active: defer release
-            if ch in active_chars:
-                sustained[note] = ch
+            if key_id in active_chars:
+                sustained[note] = key_id
             return
 
-        if ch not in active_chars:
+        if key_id not in active_chars:
             return
 
-        needs_shift = active_chars.pop(ch)
+        needs_shift = active_chars.pop(key_id)
         release_shift = needs_shift and not any(active_chars.values())
-        release_keys_simultaneous([ch], release_shift=release_shift)
+        release_keys_simultaneous([key_id], release_shift=release_shift)
         if release_shift:
             shift_held = False
 
@@ -182,14 +179,14 @@ def run_midi_file(path: str, show_notes: bool = False):
 
         if typ == "on":
             if show_notes:
-                ch = _get_char(a)
-                mapped = f"-> '{ch}'" if ch else "(unmapped)"
+                key_id = _get_key_id(a)
+                mapped = f"-> '{key_id}'" if key_id else "(unmapped)"
                 print(f"  {t:.3f}s ON  {a:3d} ({_note_name(a):4s}) {mapped}")
             handle_note_on(a, b)
         elif typ == "off":
             if show_notes:
-                ch = _get_char(a)
-                mapped = f"char='{ch}'" if ch else ""
+                key_id = _get_key_id(a)
+                mapped = f"key='{key_id}'" if key_id else ""
                 print(f"  {t:.3f}s OFF {a:3d} {mapped}")
             handle_note_off(a)
         elif typ == "cc64":
@@ -213,6 +210,8 @@ def main():
         "--show-notes", action="store_true", help="print MIDI note info on each event"
     )
     args = parser.parse_args()
+    # print("Star String Tutti Community Dedicated Plugin")
+    # print("------ QQ group: 660983631 ------")
 
     def list_ports():
         print("Available MIDI input ports:")
@@ -228,10 +227,15 @@ def main():
         return
 
     # Show mapping summary
-    mapped_notes = sorted(_NOTE_TO_CHAR.keys())
-    print(
-        f"Mapping loaded: {len(mapped_notes)} notes ({mapped_notes[0]}–{mapped_notes[-1]})"
-    )
+    all_notes = sorted(set(_NOTE_TO_CHAR.keys()) | set(_NOTE_TO_VK.keys()))
+    if all_notes:
+        print(
+            f"Mapping loaded: {len(all_notes)} notes "
+            f"({all_notes[0]}–{all_notes[-1]}, "
+            f"chars: {len(_NOTE_TO_CHAR)}, raw-VK: {len(_NOTE_TO_VK)})"
+        )
+    else:
+        print("Mapping loaded: (default)")
 
     # ── file mode ─────────────────────────────────────────────────────────
     if args.file:
@@ -260,8 +264,8 @@ def main():
             for msg in inport:
                 if msg.type == "note_on" and msg.velocity > 0:
                     if args.show_notes:
-                        ch = _get_char(msg.note)
-                        mapped = f"-> '{ch}'" if ch else "(unmapped)"
+                        key_id = _get_key_id(msg.note)
+                        mapped = f"-> '{key_id}'" if key_id else "(unmapped)"
                         print(
                             f"  ON  {msg.note:3d} ({_note_name(msg.note):4s}) vel={msg.velocity:3d} {mapped}"
                         )
@@ -271,10 +275,10 @@ def main():
                     msg.type == "note_on" and msg.velocity == 0
                 ):
                     if args.show_notes:
-                        ch = _get_char(msg.note)
+                        key_id = _get_key_id(msg.note)
                         print(
-                            f"  OFF {msg.note:3d} ({_note_name(msg.note):4s}) char='{ch}'"
-                            if ch
+                            f"  OFF {msg.note:3d} ({_note_name(msg.note):4s}) key='{key_id}'"
+                            if key_id
                             else f"  OFF {msg.note:3d}"
                         )
                     handle_note_off(msg.note)

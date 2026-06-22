@@ -1,22 +1,26 @@
-import uvicorn
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query
-from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, List
-import hashlib
-import os
-import json
-from io import BytesIO
-from datetime import timedelta, datetime
-import mido
 import asyncio
+import hashlib
+import json
 import logging
 import logging.config
-from rapidfuzz import fuzz, process
+import os
 import random
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from io import BytesIO
+from typing import Optional
 
-# 自定义日志配置
+import mido
+import music21
+import uvicorn
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from rapidfuzz import fuzz, process
+
 logging_config = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -56,14 +60,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 索引文件路径
 db_file_path = "songs.json"
 comments_db_file_path = "comments.json"
 db_lock = asyncio.Lock()
 comments_lock = asyncio.Lock()
+db_thread_lock = threading.Lock()
+bg_executor = ThreadPoolExecutor(max_workers=1)
+
+MAX_FILE_SIZE = 10485760
+MIDI_EXTENSIONS = {".mid", ".midi"}
+XML_EXTENSIONS = {".xml", ".musicxml", ".mxl"}
+ADMIN_PASSWORD = "abc"
 
 
-# 初始化索引
 def load_database():
     if os.path.exists(db_file_path):
         with open(db_file_path, "r", encoding="utf-8") as f:
@@ -77,7 +86,12 @@ async def save_database():
             json.dump(songs_db, f, indent=4, ensure_ascii=False)
 
 
-# 初始化留言数据库
+def _save_database_sync():
+    with db_thread_lock:
+        with open(db_file_path, "w", encoding="utf-8") as f:
+            json.dump(songs_db, f, indent=4, ensure_ascii=False)
+
+
 def load_comments_database():
     if os.path.exists(comments_db_file_path):
         with open(comments_db_file_path, "r", encoding="utf-8") as f:
@@ -95,17 +109,86 @@ songs_db = load_database()
 comments_db = load_comments_database()
 
 
+def detect_file_type(filename: str) -> str:
+    ext = os.path.splitext(filename)[1].lower()
+    if ext in XML_EXTENSIONS:
+        return "musicxml"
+    return "midi"
+
+
 class MusicInfo(BaseModel):
     name: str
     upload_by: str
-    duration: int  # milliseconds
-    file_size: int  # bytes
+    duration: int
+    file_size: int
     hash: str
+
+
+class UploadResponse(BaseModel):
+    succeed: bool
+    message: str
+
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+def fuzzy_search(name: str, songs_db: dict, threshold: float = 70):
+    results = []
+    for song in songs_db.values():
+        score = fuzz.token_set_ratio(name.lower(), song["name"].lower()[:-4])
+        if score >= threshold:
+            results.append(
+                {
+                    **{k: v for k, v in song.items() if k != "delete_password"},
+                    "confidence": score / 100,
+                }
+            )
+    return sorted(results, key=lambda x: x["confidence"], reverse=True)
+
+
+def _convert_xml_to_midi(xml_path: str, file_hash: str) -> Optional[str]:
+    cache_dir = os.path.join("uploads", "converted")
+    os.makedirs(cache_dir, exist_ok=True)
+    midi_path = os.path.join(cache_dir, file_hash + ".mid")
+    if os.path.exists(midi_path):
+        return midi_path
+    score = music21.converter.parse(xml_path)
+    score.write("midi", fp=midi_path)
+    return midi_path
+
+
+def _calc_xml_duration_bg(file_hash: str, file_data: bytes):
+    xml_tmp = os.path.join("uploads", f"_bg_{file_hash}.xml")
+    cache_dir = os.path.join("uploads", "converted")
+    os.makedirs(cache_dir, exist_ok=True)
+    midi_path = os.path.join(cache_dir, file_hash + ".mid")
+    try:
+        with open(xml_tmp, "wb") as f:
+            f.write(file_data)
+        score = music21.converter.parse(xml_tmp)
+        score.write("midi", fp=midi_path)
+        midi_file = mido.MidiFile(midi_path)
+        duration_ms = int(midi_file.length * 1000)
+        midi_size = os.path.getsize(midi_path)
+        if file_hash in songs_db:
+            songs_db[file_hash]["duration"] = duration_ms
+            songs_db[file_hash]["midi_size"] = midi_size
+            _save_database_sync()
+            print(
+                f"[BG] XML duration: {songs_db[file_hash]['name']} {duration_ms}ms ({midi_size}B)"
+            )
+    except Exception as e:
+        print(f"[WARN] XML duration calc failed: {e}")
+        if os.path.exists(midi_path):
+            os.remove(midi_path)
+    finally:
+        if os.path.exists(xml_tmp):
+            os.remove(xml_tmp)
 
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    with open("mid.html", "r", encoding="utf-8") as f:
+    with open("index.html", "r", encoding="utf-8") as f:
         return f.read()
 
 
@@ -116,59 +199,40 @@ async def delete_music(
     admin_password: Optional[str] = Form(None),
     route_admin: Optional[str] = Query(None),
 ):
-    """
-    删除音乐文件（支持删除密码验证和管理员密码验证）
-    """
     if hash not in songs_db:
-        # raise HTTPException(status_code=404, detail="Music not found.")
-        return {"succeed": False, "message": "未找到音乐文件。"}
-
+        return {"succeed": False, "message": "Music not found."}
     music = songs_db[hash]
-
-    # 检查是否为管理员（通过Form参数或路由参数验证密码）
-    is_admin = False
-    if admin_password and admin_password == ADMIN_PASSWORD:
-        is_admin = True
-    elif route_admin and route_admin == ADMIN_PASSWORD:
-        is_admin = True
-    elif not delete_password or music["delete_password"] != delete_password:
-        # 既不是管理员，密码也不正确
-        # raise HTTPException(status_code=400, detail="Invalid delete password.")
-        return {"succeed": False, "message": "删除密码无效。"}
-
-    # 删除音乐
+    is_admin = (admin_password and admin_password == ADMIN_PASSWORD) or (
+        route_admin and route_admin == ADMIN_PASSWORD
+    )
+    if not is_admin and (delete_password or "") != music["delete_password"]:
+        return {"succeed": False, "message": "Invalid delete password."}
     file_path = os.path.join("uploads", music["name"])
     if os.path.exists(file_path):
         os.remove(file_path)
-
     del songs_db[hash]
     await save_database()
-    return {"succeed": True, "message": "音乐文件删除成功。"}
+    return {"succeed": True, "message": "File deleted."}
 
 
 @app.get("/latest_songs")
-def get_latest_songs(page: int = Query(1, gt=0), page_size: int = Query(20, gt=0)):
-    """
-    获取最新歌曲列表，支持分页。
-    """
-    total_songs = len(songs_db)
+def get_latest_songs(
+    page: int = Query(1, gt=0),
+    page_size: int = Query(20, gt=0),
+    file_type: Optional[str] = Query(None),
+):
+    filtered = [
+        s
+        for s in songs_db.values()
+        if not file_type or s.get("file_type", "midi") == file_type
+    ]
+    total_songs = len(filtered)
     start = (page - 1) * page_size
-    end = start + page_size
-
     if start >= total_songs:
-        return JSONResponse(
-            content={
-                "total_pages": (total_songs + page_size - 1) // page_size,
-                "count": total_songs,
-                "midis": [],
-            },
-            status_code=200,
-        )
-
-    # 将数据库转为列表后进行切片并隐藏密码字段
+        return {"total_pages": 0, "count": total_songs, "midis": []}
     songs_list = [
         {k: v for k, v in song.items() if k != "delete_password"}
-        for song in list(songs_db.values())[start:end]
+        for song in filtered[start : start + page_size]
     ]
     return {
         "total_pages": (total_songs + page_size - 1) // page_size,
@@ -177,33 +241,8 @@ def get_latest_songs(page: int = Query(1, gt=0), page_size: int = Query(20, gt=0
     }
 
 
-def fuzzy_search(name: str, songs_db: dict, threshold: float = 70):
-    """
-    模糊匹配搜索（使用 rapidfuzz）
-    :param threshold: 最低置信度阈值 (0-100)
-    """
-    results = []
-    for song in songs_db.values():
-        # partial_ratio: 部分匹配更友好
-        # token_sort_ratio: 忽略词序
-        score = fuzz.token_set_ratio(name.lower(), song["name"].lower()[:-4])
-
-        if score >= threshold:
-            results.append(
-                {
-                    **{k: v for k, v in song.items() if k != "delete_password"},
-                    "confidence": score / 100,  # 转为 0-1 范围
-                }
-            )
-
-    return sorted(results, key=lambda x: x["confidence"], reverse=True)
-
-
 @app.get("/search")
 def search_songs(name: str):
-    """
-    根据歌曲名称搜索歌曲。
-    """
     if name == "*":
         while True:
             key = random.choice(list(songs_db.keys()))
@@ -215,37 +254,26 @@ def search_songs(name: str):
             results = [
                 {k: v for k, v in songs_db[key].items() if k != "delete_password"}
             ]
-            return {"message": f"随机1首歌曲", "results": results}
+            return {"message": "Random song", "results": results}
     results = fuzzy_search(name, songs_db)
     if not results:
         return JSONResponse(
-            content={"message": "未找到歌曲", "results": []}, status_code=200
+            content={"message": "No songs found", "results": []}, status_code=200
         )
+    return {"message": f"Found {len(results)} songs", "results": results}
 
-    return {"message": f"找到 {len(results)} 首歌曲", "results": results}
 
-
-# 留言功能相关API
 @app.post("/add_comment")
 async def add_comment(
     name: str = Form(...), content: str = Form(...), device_id: str = Form(...)
 ):
-    """
-    添加留言
-    """
-    # 验证长度限制
     if len(name.strip()) > 20:
-        return {"succeed": False, "message": "昵称长度不能超过20个字符"}
-
+        return {"succeed": False, "message": "Name must be 20 characters or fewer."}
     if len(content.strip()) > 100:
-        return {"succeed": False, "message": "留言内容不能超过100个字符"}
-
-    # 生成唯一ID
+        return {"succeed": False, "message": "Comment must be 100 characters or fewer."}
     comment_id = hashlib.md5(
         f"{name}-{content}-{datetime.now().isoformat()}-{device_id}".encode()
     ).hexdigest()
-
-    # 创建留言对象
     comment = {
         "id": comment_id,
         "name": name,
@@ -253,29 +281,17 @@ async def add_comment(
         "device_id": device_id,
         "created_at": datetime.now().isoformat(),
     }
-
-    # 保存到数据库
     comments_db[comment_id] = comment
     await save_comments_database()
-
-    return {"succeed": True, "message": "留言添加成功", "comment": comment}
+    return {"succeed": True, "message": "Comment added.", "comment": comment}
 
 
 @app.get("/comments")
 def get_comments():
-    """
-    获取所有留言
-    """
-    # 转换为列表并按创建时间倒序排序
     comments_list = sorted(
         list(comments_db.values()), key=lambda x: x["created_at"], reverse=True
     )
-
-    return {"succeed": True, "message": "获取留言成功", "comments": comments_list}
-
-
-# 管理员密码配置
-ADMIN_PASSWORD = "abc"  # 生产环境建议使用环境变量或配置文件
+    return {"succeed": True, "message": "Comments loaded.", "comments": comments_list}
 
 
 @app.post("/delete_comment")
@@ -285,58 +301,43 @@ async def delete_comment(
     admin_password: Optional[str] = Form(None),
     route_admin: Optional[str] = Query(None),
 ):
-    """
-    删除留言（支持设备验证和管理员密码验证）
-    """
     if comment_id not in comments_db:
-        return {"succeed": False, "message": "未找到留言"}
-
+        return {"succeed": False, "message": "Comment not found."}
     comment = comments_db[comment_id]
-
-    # 检查是否为管理员（通过Form参数或路由参数验证密码）
     is_admin = False
-    admin_source = None
-
     if admin_password and admin_password == ADMIN_PASSWORD:
         is_admin = True
-        admin_source = "form"
     elif route_admin and route_admin == ADMIN_PASSWORD:
         is_admin = True
-        admin_source = "route"
-    elif admin_password or route_admin:
-        # 记录密码错误的尝试
-        print(f"[SECURITY] 管理员密码验证失败: {admin_password or route_admin}")
-
-    # 如果不是管理员，验证是否为自己设备的留言
     if not is_admin and comment["device_id"] != device_id:
-        return {"succeed": False, "message": "只能删除自己设备的留言"}
-
-    # 记录管理员操作
+        return {"succeed": False, "message": "You can only delete your own comments."}
     if is_admin:
-        print(
-            f"[ADMIN] 管理员删除留言: comment_id={comment_id}, name={comment['name']}, source={admin_source}"
-        )
-
-    # 删除留言
+        print(f"[ADMIN] delete comment: {comment_id}, {comment['name']}")
     del comments_db[comment_id]
     await save_comments_database()
-
-    return {"succeed": True, "message": "留言删除成功"}
+    return {"succeed": True, "message": "Comment deleted."}
 
 
 @app.get("/download")
 def download_file(hash: str):
-    """
-    根据哈希值下载文件
-    """
     if hash not in songs_db:
-        raise HTTPException(status_code=404, detail="未找到音乐文件。")
-
-    file_path = os.path.join("uploads", songs_db[hash]["name"])
+        raise HTTPException(status_code=404, detail="Music not found.")
+    song = songs_db[hash]
+    file_path = os.path.join("uploads", song["name"])
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="服务器上未找到文件。")
-
-    filename = songs_db[hash]["name"].encode("utf-8").decode("latin1")
+        raise HTTPException(status_code=404, detail="File not found on server.")
+    if song.get("file_type") == "musicxml":
+        converted_path = _convert_xml_to_midi(file_path, hash)
+        if converted_path:
+            midi_name = os.path.splitext(song["name"])[0] + ".mid"
+            filename = midi_name.encode("utf-8").decode("latin1")
+            return FileResponse(
+                converted_path,
+                media_type="audio/midi",
+                filename=filename,
+                headers={"Content-Disposition": f"attachment; filename={filename}"},
+            )
+    filename = song["name"].encode("utf-8").decode("latin1")
     return FileResponse(
         file_path,
         media_type="audio/midi",
@@ -345,13 +346,41 @@ def download_file(hash: str):
     )
 
 
-# 最大文件大小限制 (1MB)
-MAX_FILE_SIZE = 1048576
-
-
-class UploadResponse(BaseModel):
-    succeed: bool
-    message: str
+@app.get("/download_xml")
+def download_xml_file(hash: str, raw: Optional[str] = Query(None)):
+    if hash not in songs_db:
+        raise HTTPException(status_code=404, detail="Music not found.")
+    song = songs_db[hash]
+    if song.get("file_type") != "musicxml":
+        raise HTTPException(status_code=400, detail="Not a MusicXML file.")
+    file_path = os.path.join("uploads", song["name"])
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found on server.")
+    if raw and raw.lower() == "true":
+        filename = song["name"].encode("utf-8").decode("latin1")
+        return FileResponse(
+            file_path,
+            media_type="application/vnd.recordare.musicxml+xml",
+            filename=filename,
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    converted_path = _convert_xml_to_midi(file_path, hash)
+    if converted_path:
+        midi_name = os.path.splitext(song["name"])[0] + ".mid"
+        filename = midi_name.encode("utf-8").decode("latin1")
+        return FileResponse(
+            converted_path,
+            media_type="audio/midi",
+            filename=filename,
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    filename = song["name"].encode("utf-8").decode("latin1")
+    return FileResponse(
+        file_path,
+        media_type="application/vnd.recordare.musicxml+xml",
+        filename=filename,
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @app.post("/upload", response_model=UploadResponse)
@@ -360,60 +389,45 @@ async def upload_file(
     upload_by: str = Form(...),
     delete_password: str = Form(...),
 ):
-    """
-    处理文件上传请求。
-    """
     global songs_db
-    # 检查文件类型
-    """
-    if file.content_type != "audio/midi":
-        #raise HTTPException(status_code=400, detail="Invalid file type. Only MIDI files are allowed.")
-        return JSONResponse(content={"succeed": False, "message": "文件类型无效，仅允许上传MIDI文件。"})
-    """
-    # 检查文件大小
     file_data = await file.read()
     if len(file_data) > MAX_FILE_SIZE:
         return JSONResponse(
-            content={"succeed": False, "message": "文件大小超过了1MB的最大限制。"}
-        )  # , status_code=400)
-    # 计算文件哈希
+            content={"succeed": False, "message": "File size exceeds 10MB limit."}
+        )
     file_hash = hashlib.md5(file_data).hexdigest()
-
-    # 检查哈希是否已存在
     if file_hash in songs_db:
-        # raise HTTPException(status_code=400, detail="A file with the same hash already exists.")
         return JSONResponse(
             content={
                 "succeed": False,
-                "message": f"已存在相同文件: {songs_db[file_hash]['name']}",
+                "message": f"Duplicate: {songs_db[file_hash]['name']}",
             }
-        )  # , status_code=400)
-
-    # 计算 MIDI 时长
-    try:
+        )
+    file_name = (
+        file.filename.replace("primary:", "")
+        if file.filename.startswith("primary:")
+        else file.filename
+    )
+    file_type = detect_file_type(file_name)
+    if file_type == "musicxml":
+        if not file_data.lstrip().startswith(b"<?xml"):
+            raise HTTPException(
+                status_code=400, detail="Invalid MusicXML: missing XML declaration."
+            )
+        duration_ms = 0
+        bg_executor.submit(_calc_xml_duration_bg, file_hash, file_data)
+    else:
         midi_file = mido.MidiFile(file=BytesIO(file_data))
-        midi_duration = midi_file.length
-        duration_ms = int(midi_duration * 1000)  # 转为毫秒
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"处理MIDI文件失败: {str(e)}")
-
-    # 模拟文件存储
-    file_name = file.filename
-
-    if file_name[:8] == "primary:":
-        file_name = file_name.replace("primary:", "")
+        duration_ms = int(midi_file.length * 1000)
     base_name, ext = os.path.splitext(file_name)
     counter = 1
     while os.path.exists(os.path.join("uploads", file_name)):
         file_name = f"{base_name}({counter}){ext}"
         counter += 1
-
     file_path = os.path.join("uploads", file_name)
     os.makedirs("uploads", exist_ok=True)
     with open(file_path, "wb") as f:
         f.write(file_data)
-
-    # 保存到模拟数据库
     songs_db = {
         file_hash: {
             "name": file_name,
@@ -423,19 +437,15 @@ async def upload_file(
             "hash": file_hash,
             "delete_password": delete_password,
             "upload_time": datetime.now().isoformat(),
+            "file_type": file_type,
         },
         **songs_db,
     }
     await save_database()
-
-    duration_str = str(timedelta(milliseconds=duration_ms))
-    return {
-        "succeed": True,
-        "message": f"文件 '{file_name}' 上传成功。时长：{duration_str}。",
-    }
+    return {"succeed": True, "message": f"'{file_name}' uploaded."}
 
 
 if __name__ == "__main__":
     uvicorn.run(
-        app=app, host="0.0.0.0", port=1200, log_level="debug", log_config=logging_config
+        app=app, host="0.0.0.0", port=1200, log_level="info", log_config=logging_config
     )

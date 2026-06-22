@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI 管理页</title>
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+    <!-- 语言切换器 -->
+    <div class="language-switcher">
+        <button id="currentLangBtn" onclick="language.showDropdown()">🌐 语言</button>
+        <div id="languageDropdown" class="language-dropdown">
+            <button onclick="language.switch('zh')">中文</button>
+            <button onclick="language.switch('en')">English</button>
+            <button onclick="language.switch('ja')">日本語</button>
+            <button onclick="language.switch('vi')">Tiếng Việt</button>
+            <button onclick="language.switch('ko')">한국어</button>
+        </div>
+    </div>
+
+    <div class="tab-container">
+        <!-- 标签页导航 -->
+        <div class="tab-nav">
+            <button class="active" onclick="midiApp.switchTab('upload', event)" data-key="upload-page">上传</button>
+            <button onclick="midiApp.switchTab('search', event)" data-key="search-songs">搜索歌曲</button>
+            <button onclick="midiApp.switchTab('list-midi', event)" data-key="latest-midi">MIDI</button>
+            <button onclick="midiApp.switchTab('list-xml', event)" data-key="latest-musicxml">MusicXML</button>
+            <button onclick="midiApp.switchTab('comments', event)" data-key="message-board">留言板</button>
+        </div>
+
+        <!-- 标签页内容 -->
+        <div class="tab-content">
+            <!-- 上传标签页 -->
+            <div id="upload" class="tab-panel active">
+                <form id="upload-form">
+                    <input type="file" id="file" accept=".mid,.midi,.xml,.musicxml,.mxl">
+                    <p class="small" id="file_type_hint" style="margin: 0; color: var(--text-secondary);"></p>
+                    <input type="text" id="upload_by" placeholder="上传者名称" data-placeholder-key="uploader-name" required>
+                    <input type="password" id="delete_password" placeholder="删除时需要的密码" data-placeholder-key="delete-password" required>
+                    <button type="button" onclick="midiApp.upload()" data-key="upload">上传</button>
+                    <p id="upload_result" class="small"></p>
+                </form>
+            </div>
+
+            <!-- 搜索标签页 -->
+            <div id="search" class="tab-panel">
+                <div id="search-area">
+                    <input type="text" id="search_name" placeholder="歌曲名（支持模糊 / * 随机）" data-placeholder-key="search-placeholder">
+                    <button onclick="midiApp.search()" data-key="search">搜索</button>
+                </div>
+                <div id="search_results"></div>
+            </div>
+
+            <!-- MIDI 列表标签页 -->
+            <div id="list-midi" class="tab-panel">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span data-key="latest-midi-header">MIDI 上传</span>
+                    <button onclick="midiApp.refreshMidiList()" data-key="refresh">刷新</button>
+                </div>
+                <div class="table-container" id="midi_table_container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-key="name">名称</th>
+                                <th data-key="uploader">上传者</th>
+                                <th data-key="duration">时长</th>
+                                <th data-key="size">大小</th>
+                                <th data-key="upload-time">上传时间</th>
+                                <th data-key="actions">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="midi_list"></tbody>
+                    </table>
+                    <div id="midi_loading" class="loading-indicator" style="display:none;" data-key="loading">加载中...</div>
+                    <div id="midi_end" class="end-indicator" style="display:none;" data-key="no-more-data">没有更多数据</div>
+                </div>
+            </div>
+
+            <!-- MusicXML 列表标签页 -->
+            <div id="list-xml" class="tab-panel">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span data-key="latest-musicxml-header">MusicXML 上传</span>
+                    <button onclick="midiApp.refreshXmlList()" data-key="refresh">刷新</button>
+                </div>
+                <div class="table-container" id="xml_table_container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-key="name">名称</th>
+                                <th data-key="uploader">上传者</th>
+                                <th data-key="duration">时长</th>
+                                <th data-key="size">大小</th>
+                                <th data-key="upload-time">上传时间</th>
+                                <th data-key="actions">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="xml_list"></tbody>
+                    </table>
+                    <div id="xml_loading" class="loading-indicator" style="display:none;" data-key="loading">加载中...</div>
+                    <div id="xml_end" class="end-indicator" style="display:none;" data-key="no-more-data">没有更多数据</div>
+                </div>
+            </div>
+
+            <!-- 留言板标签页 -->
+            <div id="comments" class="tab-panel">
+                <!-- 添加留言表单 -->
+                <div id="add-comment-form" class="comment-form">
+                    <h4 data-key="message">留言</h4>
+                    <form id="comment-form">
+                        <input type="text" id="comment_name" placeholder="您的昵称" data-placeholder-key="nickname" required>
+                        <textarea id="comment_content" placeholder="请输入留言内容" data-placeholder-key="message-content" rows="4" required></textarea>
+                        <button type="button" onclick="midiApp.addComment()" data-key="submit-message">提交留言</button>
+                    </form>
+                </div>
+
+                <!-- 刷新按钮 -->
+                <button onclick="midiApp.loadComments()" style="margin: 0 20px 10px; padding: 4px 12px; float: right;" data-key="refresh-comments">刷新</button>
+                <div style="clear: both;"></div>
+
+                <!-- 留言列表 -->
+                <div id="comments_list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 音频播放器遮罩 -->
+    <div class="player-overlay" id="playerOverlay" onclick="audioPlayer.close()"></div>
+
+    <!-- 音频播放器 -->
+    <div class="audio-player" id="audioPlayer">
+        <h3 id="playerTitle" data-key="now-playing">正在播放</h3>
+        <div class="player-controls">
+            <audio id="audioElement" preload="metadata"></audio>
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div class="time-info">
+                <span id="currentTime">0:00</span>
+                <span id="duration">0:00</span>
+            </div>
+        </div>
+        <div class="player-actions">
+            <button id="playPauseButton" onclick="audioPlayer.togglePlayPause()" disabled data-key="loading">加载中...</button>
+            <button class="close-button" onclick="audioPlayer.close()" data-key="close">关闭</button>
+        </div>
+    </div>
+
+    <!-- 等待提示 -->
+    <div class="audio-player" id="waitingPlayer">
+        <div class="waiting-message">
+            <div class="spinner"></div>
+            <p data-key="generating-audio">正在生成音频，请稍候...</p>
+        </div>
+    </div>
+
+    <footer>
+        <a href="https://github.com/byzp/of-lyre/tree/main/web" target="_blank" data-key="about-api">有关此 API</a>
+    </footer>
+
+    <!-- JS 模块 - 按依赖顺序加载 -->
+    <script src="static/js/i18n.js"></script>
+    <script src="static/js/utils.js"></script>
+    <script src="static/js/tabs.js"></script>
+    <script src="static/js/list.js"></script>
+    <script src="static/js/upload.js"></script>
+    <script src="static/js/search.js"></script>
+    <script src="static/js/comments.js"></script>
+    <script src="static/js/player.js"></script>
+    <script src="static/js/app.js"></script>
+</body>
+</html>
