@@ -60,6 +60,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    if "cache-control" not in response.headers:
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 db_file_path = "songs.json"
 comments_db_file_path = "comments.json"
 db_lock = asyncio.Lock()

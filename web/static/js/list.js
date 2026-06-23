@@ -74,7 +74,7 @@ function createSongList(config) {
                     <td>${utils.escapeHtml(song.name)}</td>
                     <td>${utils.escapeHtml(song.upload_by || '')}</td>
                     <td>${utils.formatDuration(song.duration)}</td>
-                    <td>${utils.formatFileSize(song.midi_size || song.file_size)}</td>
+                    <td>${utils.formatFileSize(config.sizeField ? song[config.sizeField] : (song.midi_size || song.file_size))}</td>
                     <td>${utils.formatUploadTime(song.upload_time)}</td>
                     <td>${formatActions(song)}</td>
                 `;

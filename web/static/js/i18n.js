@@ -11,6 +11,7 @@ const language = {
         zh: {
             title: 'MIDI 管理页',
             'upload-midi': '上传 MIDI',
+            'select-file': '选择文件',
             'upload-page': '上传',
             'latest-midi': 'MIDI',
             'latest-musicxml': 'MusicXML',
@@ -76,6 +77,7 @@ const language = {
         en: {
             title: 'MIDI Manager',
             'upload-midi': 'Upload MIDI',
+            'select-file': 'Select File',
             'upload-page': 'Upload',
             'latest-midi': 'MIDI',
             'latest-musicxml': 'MusicXML',
@@ -141,6 +143,7 @@ const language = {
         ja: {
             title: 'MIDI 管理ページ',
             'upload-midi': 'MIDIをアップロード',
+            'select-file': 'ファイルを選択',
             'upload-page': 'アップロード',
             'latest-midi': 'MIDI',
             'latest-musicxml': 'MusicXML',
@@ -206,6 +209,7 @@ const language = {
         vi: {
             title: 'Trang Quản lý MIDI',
             'upload-midi': 'Tải lên MIDI',
+            'select-file': 'Chọn tệp',
             'upload-page': 'Tải lên',
             'latest-midi': 'MIDI',
             'latest-musicxml': 'MusicXML',
@@ -271,6 +275,7 @@ const language = {
         ko: {
             title: 'MIDI 관리 페이지',
             'upload-midi': 'MIDI 업로드',
+            'select-file': '파일 선택',
             'upload-page': '업로드',
             'latest-midi': 'MIDI',
             'latest-musicxml': 'MusicXML',

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MIDI 管理页</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
     <link rel="stylesheet" href="static/css/style.css">
 </head>
 <body>
@@ -34,7 +35,8 @@
             <!-- 上传标签页 -->
             <div id="upload" class="tab-panel active">
                 <form id="upload-form">
-                    <input type="file" id="file" accept=".mid,.midi,.xml,.musicxml,.mxl">
+                    <label for="file" data-key="select-file">选择文件</label>
+                    <input type="file" id="file" accept=".mid,.midi,.xml,.musicxml,.mxl" title="选择 MIDI 或 MusicXML 文件">
                     <p class="small" id="file_type_hint" style="margin: 0; color: var(--text-secondary);"></p>
                     <input type="text" id="upload_by" placeholder="上传者名称" data-placeholder-key="uploader-name" required>
                     <input type="password" id="delete_password" placeholder="删除时需要的密码" data-placeholder-key="delete-password" required>

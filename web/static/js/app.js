@@ -21,6 +21,7 @@ const midiList = createSongList({
 const xmlList = createSongList({
     fileType: 'musicxml',
     downloadEndpoint: '/download_xml?raw=true&',
+    sizeField: 'file_size',  // 显示原始 XML 文件大小，而非转换后的 MIDI 大小
     elementIds: {
         listId: 'xml_list',
         loadingId: 'xml_loading',
