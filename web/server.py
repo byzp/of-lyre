@@ -69,6 +69,7 @@ async def add_security_headers(request, call_next):
         response.headers["Cache-Control"] = "no-cache"
     return response
 
+
 db_file_path = "songs.json"
 comments_db_file_path = "comments.json"
 db_lock = asyncio.Lock()
@@ -166,15 +167,11 @@ def _convert_xml_to_midi(xml_path: str, file_hash: str) -> Optional[str]:
     return midi_path
 
 
-def _calc_xml_duration_bg(file_hash: str, file_data: bytes):
-    xml_tmp = os.path.join("uploads", f"_bg_{file_hash}.xml")
+def _calc_xml_duration_bg(file_hash: str, score):
     cache_dir = os.path.join("uploads", "converted")
     os.makedirs(cache_dir, exist_ok=True)
     midi_path = os.path.join(cache_dir, file_hash + ".mid")
     try:
-        with open(xml_tmp, "wb") as f:
-            f.write(file_data)
-        score = music21.converter.parse(xml_tmp)
         score.write("midi", fp=midi_path)
         midi_file = mido.MidiFile(midi_path)
         duration_ms = int(midi_file.length * 1000)
@@ -190,9 +187,6 @@ def _calc_xml_duration_bg(file_hash: str, file_data: bytes):
         print(f"[WARN] XML duration calc failed: {e}")
         if os.path.exists(midi_path):
             os.remove(midi_path)
-    finally:
-        if os.path.exists(xml_tmp):
-            os.remove(xml_tmp)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -418,16 +412,6 @@ async def upload_file(
         else file.filename
     )
     file_type = detect_file_type(file_name)
-    if file_type == "musicxml":
-        if not file_data.lstrip().startswith(b"<?xml"):
-            raise HTTPException(
-                status_code=400, detail="Invalid MusicXML: missing XML declaration."
-            )
-        duration_ms = 0
-        bg_executor.submit(_calc_xml_duration_bg, file_hash, file_data)
-    else:
-        midi_file = mido.MidiFile(file=BytesIO(file_data))
-        duration_ms = int(midi_file.length * 1000)
     base_name, ext = os.path.splitext(file_name)
     counter = 1
     while os.path.exists(os.path.join("uploads", file_name)):
@@ -437,6 +421,18 @@ async def upload_file(
     os.makedirs("uploads", exist_ok=True)
     with open(file_path, "wb") as f:
         f.write(file_data)
+
+    if file_type == "musicxml":
+        try:
+            score = music21.converter.parse(file_path)
+        except Exception:
+            os.remove(file_path)
+            raise HTTPException(status_code=400, detail="Failed to parse music file.")
+        duration_ms = 0
+        bg_executor.submit(_calc_xml_duration_bg, file_hash, score)
+    else:
+        midi_file = mido.MidiFile(file=BytesIO(file_data))
+        duration_ms = int(midi_file.length * 1000)
     songs_db = {
         file_hash: {
             "name": file_name,
