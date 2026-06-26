@@ -3,7 +3,7 @@
 //   midiList = createSongList({ fileType: null, downloadEndpoint: '/download', ... })
 //   xmlList  = createSongList({ fileType: 'musicxml', downloadEndpoint: '/download_xml?raw=true', ... })
 function createSongList(config) {
-    const { fileType, downloadEndpoint, elementIds } = config;
+    const { downloadEndpoint, elementIds } = config;
     const API_BASE = location.origin;
 
     // 列表状态
@@ -22,9 +22,12 @@ function createSongList(config) {
         get tableContainer() { return document.getElementById(elementIds.containerId); }
     };
 
-    // 构建下载 URL
-    function buildDownloadUrl(hash) {
-        return `${API_BASE}${downloadEndpoint}&hash=${encodeURIComponent(hash)}`;
+    // 构建下载 URL（按文件类型区分）
+    function buildDownloadUrl(song) {
+        if (song.file_type === 'musicxml') {
+            return `${API_BASE}/download_xml?raw=true&hash=${encodeURIComponent(song.hash)}`;
+        }
+        return `${API_BASE}${downloadEndpoint}&hash=${encodeURIComponent(song.hash)}`;
     }
 
     // 格式化操作按钮
@@ -32,7 +35,7 @@ function createSongList(config) {
         const deleteBtn = language.t('delete');
         const playBtn = language.t('play');
         const downloadBtn = language.t('download');
-        const downloadUrl = buildDownloadUrl(song.hash);
+        const downloadUrl = buildDownloadUrl(song);
 
         return `
             <div class="actions">
@@ -53,8 +56,8 @@ function createSongList(config) {
 
         try {
             let url = `${API_BASE}/latest_songs?page=${page}&page_size=${state.pageSize}`;
-            if (fileType) {
-                url += `&file_type=${encodeURIComponent(fileType)}`;
+            if (config.fileType) {
+                url += `&file_type=${encodeURIComponent(config.fileType)}`;
             }
             const res = await fetch(url);
             if (!res.ok) {
@@ -105,6 +108,11 @@ function createSongList(config) {
         loadLatest(1, false);
     }
 
+    // 动态修改 fileType 过滤器
+    function setFileType(newType) {
+        config.fileType = newType;
+    }
+
     // 滚动加载
     function setupScrollLoad() {
         const onScroll = utils.debounce(() => {
@@ -122,6 +130,7 @@ function createSongList(config) {
         loadLatest,
         refreshList,
         setupScrollLoad,
+        setFileType,
         formatActions
     };
 }

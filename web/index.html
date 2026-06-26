@@ -38,8 +38,8 @@
                     <label for="file" data-key="select-file">选择文件</label>
                     <input type="file" id="file" accept=".mid,.midi,.xml,.musicxml,.mxl" title="选择 MIDI 或 MusicXML 文件">
                     <p class="small" id="file_type_hint" style="margin: 0; color: var(--text-secondary);"></p>
-                    <input type="text" id="upload_by" placeholder="上传者名称" data-placeholder-key="uploader-name" required>
-                    <input type="password" id="delete_password" placeholder="删除时需要的密码" data-placeholder-key="delete-password" required>
+                    <input type="text" id="upload_by" placeholder="上传者名称" data-placeholder-key="uploader-name">
+                    <input type="password" id="delete_password" placeholder="删除时需要的密码" data-placeholder-key="delete-password">
                     <button type="button" onclick="midiApp.upload()" data-key="upload">上传</button>
                     <p id="upload_result" class="small"></p>
                 </form>
@@ -56,8 +56,11 @@
 
             <!-- MIDI 列表标签页 -->
             <div id="list-midi" class="tab-panel">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <span data-key="latest-midi-header">MIDI 上传</span>
+                <div class="list-header">
+                    <label class="include-other-label">
+                        <input type="checkbox" id="midi_include_other" onchange="midiApp.toggleMidiOther()">
+                        <span data-key="include-other">包含另一格式</span>
+                    </label>
                     <button onclick="midiApp.refreshMidiList()" data-key="refresh">刷新</button>
                 </div>
                 <div class="table-container" id="midi_table_container">
@@ -81,8 +84,11 @@
 
             <!-- MusicXML 列表标签页 -->
             <div id="list-xml" class="tab-panel">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <span data-key="latest-musicxml-header">MusicXML 上传</span>
+                <div class="list-header">
+                    <label class="include-other-label">
+                        <input type="checkbox" id="xml_include_other" onchange="midiApp.toggleXmlOther()">
+                        <span data-key="include-other">包含另一格式</span>
+                    </label>
                     <button onclick="midiApp.refreshXmlList()" data-key="refresh">刷新</button>
                 </div>
                 <div class="table-container" id="xml_table_container">
