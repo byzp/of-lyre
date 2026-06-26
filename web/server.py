@@ -167,6 +167,17 @@ def _convert_xml_to_midi(xml_path: str, file_hash: str) -> Optional[str]:
     return midi_path
 
 
+def _convert_midi_to_xml(midi_path: str, file_hash: str) -> Optional[str]:
+    cache_dir = os.path.join("uploads", "converted")
+    os.makedirs(cache_dir, exist_ok=True)
+    xml_path = os.path.join(cache_dir, file_hash + ".mxl")
+    if os.path.exists(xml_path):
+        return xml_path
+    score = music21.converter.parse(midi_path)
+    score.write("musicxml", fp=xml_path)
+    return xml_path
+
+
 def _calc_xml_duration_bg(file_hash: str, score):
     cache_dir = os.path.join("uploads", "converted")
     os.makedirs(cache_dir, exist_ok=True)
@@ -349,17 +360,56 @@ def download_file(hash: str):
     )
 
 
+@app.get("/download_midi")
+def download_midi_file(hash: str):
+    if hash not in songs_db:
+        raise HTTPException(status_code=404, detail="Music not found.")
+    song = songs_db[hash]
+    file_path = os.path.join("uploads", song["name"])
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found on server.")
+    if song.get("file_type") == "musicxml":
+        converted_path = _convert_xml_to_midi(file_path, hash)
+        if converted_path:
+            midi_name = os.path.splitext(song["name"])[0] + ".mid"
+            filename = midi_name.encode("utf-8").decode("latin1")
+            return FileResponse(
+                converted_path,
+                media_type="audio/midi",
+                filename=filename,
+                headers={"Content-Disposition": f"attachment; filename={filename}"},
+            )
+    filename = song["name"].encode("utf-8").decode("latin1")
+    return FileResponse(
+        file_path,
+        media_type="audio/midi",
+        filename=filename,
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 @app.get("/download_xml")
 def download_xml_file(hash: str, raw: Optional[str] = Query(None)):
     if hash not in songs_db:
         raise HTTPException(status_code=404, detail="Music not found.")
     song = songs_db[hash]
-    if song.get("file_type") != "musicxml":
-        raise HTTPException(status_code=400, detail="Not a MusicXML file.")
     file_path = os.path.join("uploads", song["name"])
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found on server.")
     if raw and raw.lower() == "true":
+        filename = song["name"].encode("utf-8").decode("latin1")
+        media_type = (
+            "application/vnd.recordare.musicxml+xml"
+            if song.get("file_type") == "musicxml"
+            else "audio/midi"
+        )
+        return FileResponse(
+            file_path,
+            media_type=media_type,
+            filename=filename,
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    if song.get("file_type") == "musicxml":
         filename = song["name"].encode("utf-8").decode("latin1")
         return FileResponse(
             file_path,
@@ -367,16 +417,17 @@ def download_xml_file(hash: str, raw: Optional[str] = Query(None)):
             filename=filename,
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
-    converted_path = _convert_xml_to_midi(file_path, hash)
+    converted_path = _convert_midi_to_xml(file_path, hash)
     if converted_path:
-        midi_name = os.path.splitext(song["name"])[0] + ".mid"
-        filename = midi_name.encode("utf-8").decode("latin1")
+        xml_name = os.path.splitext(song["name"])[0] + ".mxl"
+        filename = xml_name.encode("utf-8").decode("latin1")
         return FileResponse(
             converted_path,
-            media_type="audio/midi",
+            media_type="application/vnd.recordare.musicxml+xml",
             filename=filename,
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
+
     filename = song["name"].encode("utf-8").decode("latin1")
     return FileResponse(
         file_path,
@@ -389,8 +440,8 @@ def download_xml_file(hash: str, raw: Optional[str] = Query(None)):
 @app.post("/upload", response_model=UploadResponse)
 async def upload_file(
     file: UploadFile = File(...),
-    upload_by: str = Form(...),
-    delete_password: str = Form(...),
+    upload_by: str = Form(""),
+    delete_password: str = Form(""),
 ):
     global songs_db
     file_data = await file.read()

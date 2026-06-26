@@ -5,9 +5,9 @@ const appState = {
 };
 
 // 创建两个独立的列表实例
-// MIDI 列表：显示所有文件（含 XML），下载时 XML 自动转换为 MIDI
+// MIDI 列表：默认只显示 MIDI 文件，下载为 MIDI 格式
 const midiList = createSongList({
-    fileType: null,  // 不过滤，显示全部
+    fileType: 'midi',
     downloadEndpoint: '/download?',
     elementIds: {
         listId: 'midi_list',
@@ -17,11 +17,11 @@ const midiList = createSongList({
     }
 });
 
-// MusicXML 列表：只显示 XML 文件，下载原始 XML
+// MusicXML 列表：默认只显示 MusicXML 文件，下载为 MusicXML 格式（MIDI 自动转换）
 const xmlList = createSongList({
     fileType: 'musicxml',
-    downloadEndpoint: '/download_xml?raw=true&',
-    sizeField: 'file_size',  // 显示原始 XML 文件大小，而非转换后的 MIDI 大小
+    downloadEndpoint: '/download_xml?',
+    sizeField: 'file_size',
     elementIds: {
         listId: 'xml_list',
         loadingId: 'xml_loading',
@@ -32,6 +32,20 @@ const xmlList = createSongList({
 
 // 默认 songList 指向 MIDI 列表（向后兼容其他模块引用）
 songList = midiList;
+
+// 复选框切换：MIDI 列表是否包含 MusicXML
+function toggleMidiOther() {
+    const checked = document.getElementById('midi_include_other').checked;
+    midiList.setFileType(checked ? null : 'midi');
+    midiList.refreshList();
+}
+
+// 复选框切换：MusicXML 列表是否包含 MIDI
+function toggleXmlOther() {
+    const checked = document.getElementById('xml_include_other').checked;
+    xmlList.setFileType(checked ? null : 'musicxml');
+    xmlList.refreshList();
+}
 
 // 歌曲操作模块
 const songActions = (() => {
@@ -122,6 +136,8 @@ window.midiApp = {
     refreshMidiList: midiList.refreshList,
     refreshXmlList: xmlList.refreshList,
     refreshList: midiList.refreshList,  // 向后兼容
+    toggleMidiOther: toggleMidiOther,
+    toggleXmlOther: toggleXmlOther,
     download: songActions.download,
     deleteSong: songActions.deleteSong,
     playAudio: audioPlayer.playAudio,
