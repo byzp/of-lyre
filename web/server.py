@@ -77,10 +77,37 @@ comments_lock = asyncio.Lock()
 db_thread_lock = threading.Lock()
 bg_executor = ThreadPoolExecutor(max_workers=1)
 
+_processing_lock = threading.Lock()
+_processing = {}
+
+
+def _claim_cache(cache_key, cache_path):
+    if os.path.exists(cache_path):
+        return False
+    with _processing_lock:
+        if cache_key in _processing:
+            _processing[cache_key].wait()
+            return False
+        _processing[cache_key] = threading.Event()
+    if os.path.exists(cache_path):
+        _release_cache(cache_key)
+        return False
+    return True
+
+
+def _release_cache(cache_key):
+    with _processing_lock:
+        ev = _processing.pop(cache_key, None)
+    if ev:
+        ev.set()
+
+
 MAX_FILE_SIZE = 10485760
 MIDI_EXTENSIONS = {".mid", ".midi"}
 XML_EXTENSIONS = {".xml", ".musicxml", ".mxl"}
+CACHE_DIR = "cache"
 ADMIN_PASSWORD = "abc"
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 
 def load_database():
@@ -157,9 +184,7 @@ def fuzzy_search(name: str, songs_db: dict, threshold: float = 70):
 
 
 def _convert_xml_to_midi(xml_path: str, file_hash: str) -> Optional[str]:
-    cache_dir = os.path.join("uploads", "converted")
-    os.makedirs(cache_dir, exist_ok=True)
-    midi_path = os.path.join(cache_dir, file_hash + ".mid")
+    midi_path = os.path.join(CACHE_DIR, file_hash + ".mid")
     if os.path.exists(midi_path):
         return midi_path
     score = music21.converter.parse(xml_path)
@@ -168,9 +193,7 @@ def _convert_xml_to_midi(xml_path: str, file_hash: str) -> Optional[str]:
 
 
 def _convert_midi_to_xml(midi_path: str, file_hash: str) -> Optional[str]:
-    cache_dir = os.path.join("uploads", "converted")
-    os.makedirs(cache_dir, exist_ok=True)
-    xml_path = os.path.join(cache_dir, file_hash + ".mxl")
+    xml_path = os.path.join(CACHE_DIR, file_hash + ".mxl")
     if os.path.exists(xml_path):
         return xml_path
     score = music21.converter.parse(midi_path)
@@ -182,9 +205,7 @@ def _convert_midi_to_xml(midi_path: str, file_hash: str) -> Optional[str]:
 
 
 def _calc_xml_duration_bg(file_hash: str, score):
-    cache_dir = os.path.join("uploads", "converted")
-    os.makedirs(cache_dir, exist_ok=True)
-    midi_path = os.path.join(cache_dir, file_hash + ".mid")
+    midi_path = os.path.join(CACHE_DIR, file_hash + ".mid")
     try:
         score.write("midi", fp=midi_path)
         midi_file = mido.MidiFile(midi_path)
@@ -353,41 +374,64 @@ async def delete_comment(
 
 
 @app.get("/download")
-def download_file(hash: str):
+def download_file(hash: str, semitones: int = Query(0), bpm: int = Query(0, ge=0)):
     if hash not in songs_db:
         raise HTTPException(status_code=404, detail="Music not found.")
     song = songs_db[hash]
     file_path = os.path.join("uploads", song["name"])
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found on server.")
-    if song.get("file_type") == "musicxml":
-        converted_path = _convert_xml_to_midi(file_path, hash)
-        if converted_path:
-            midi_name = os.path.splitext(song["name"])[0] + ".mid"
-            filename = midi_name.encode("utf-8").decode("latin1")
-            return FileResponse(
-                converted_path,
-                media_type="audio/midi",
-                filename=filename,
-                headers={"Content-Disposition": f"attachment; filename={filename}"},
-            )
-    filename = song["name"].encode("utf-8").decode("latin1")
-    return FileResponse(
-        file_path,
-        media_type="audio/midi",
-        filename=filename,
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
-
-
-@app.get("/download_midi")
-def download_midi_file(hash: str):
-    if hash not in songs_db:
-        raise HTTPException(status_code=404, detail="Music not found.")
-    song = songs_db[hash]
-    file_path = os.path.join("uploads", song["name"])
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found on server.")
+    if semitones != 0 or bpm > 0:
+        cache_key = f"{hash}_t{semitones}_b{bpm}"
+        midi_path = os.path.join(CACHE_DIR, cache_key + ".mid")
+        if _claim_cache(cache_key, midi_path):
+            try:
+                if song.get("file_type") == "midi":
+                    mid = mido.MidiFile(file_path)
+                    if semitones != 0:
+                        for track in mid.tracks:
+                            for msg in track:
+                                if msg.type in ("note_on", "note_off") and hasattr(
+                                    msg, "note"
+                                ):
+                                    msg.note = max(0, min(127, msg.note + semitones))
+                    if bpm > 0:
+                        new_tempo = mido.bpm2tempo(bpm)
+                        found = False
+                        for track in mid.tracks:
+                            for msg in track:
+                                if msg.type == "set_tempo":
+                                    msg.tempo = new_tempo
+                                    found = True
+                        if not found:
+                            mid.tracks[0].insert(
+                                0, mido.MetaMessage("set_tempo", tempo=new_tempo)
+                            )
+                    mid.save(midi_path)
+                else:
+                    score = music21.converter.parse(file_path)
+                    if semitones != 0:
+                        score.transpose(semitones, inPlace=True)
+                    if bpm > 0:
+                        for el in score.flat.getElementsByClass(
+                            music21.tempo.MetronomeMark
+                        ):
+                            el.number = bpm
+                        if not list(
+                            score.flat.getElementsByClass(music21.tempo.MetronomeMark)
+                        ):
+                            score.insert(0, music21.tempo.MetronomeMark(number=bpm))
+                    score.write("midi", fp=midi_path)
+            finally:
+                _release_cache(cache_key)
+        midi_name = os.path.splitext(song["name"])[0] + ".mid"
+        filename = midi_name.encode("utf-8").decode("latin1")
+        return FileResponse(
+            midi_path,
+            media_type="audio/midi",
+            filename=filename,
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
     if song.get("file_type") == "musicxml":
         converted_path = _convert_xml_to_midi(file_path, hash)
         if converted_path:
@@ -409,13 +453,84 @@ def download_midi_file(hash: str):
 
 
 @app.get("/download_xml")
-def download_xml_file(hash: str, raw: Optional[str] = Query(None)):
+def download_xml_file(
+    hash: str,
+    raw: Optional[str] = Query(None),
+    semitones: int = Query(0),
+    bpm: int = Query(0, ge=0),
+):
     if hash not in songs_db:
         raise HTTPException(status_code=404, detail="Music not found.")
     song = songs_db[hash]
     file_path = os.path.join("uploads", song["name"])
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found on server.")
+    if semitones != 0 or bpm > 0:
+        cache_key = f"{hash}_t{semitones}_b{bpm}"
+        mxl_path = os.path.join(CACHE_DIR, cache_key + ".mxl")
+        if _claim_cache(cache_key, mxl_path):
+            try:
+                if song.get("file_type") == "midi":
+                    mid = mido.MidiFile(file_path)
+                    if semitones != 0:
+                        for track in mid.tracks:
+                            for msg in track:
+                                if msg.type in ("note_on", "note_off") and hasattr(
+                                    msg, "note"
+                                ):
+                                    msg.note = max(0, min(127, msg.note + semitones))
+                    if bpm > 0:
+                        new_tempo = mido.bpm2tempo(bpm)
+                        found = False
+                        for track in mid.tracks:
+                            for msg in track:
+                                if msg.type == "set_tempo":
+                                    msg.tempo = new_tempo
+                                    found = True
+                        if not found:
+                            mid.tracks[0].insert(
+                                0, mido.MetaMessage("set_tempo", tempo=new_tempo)
+                            )
+                    temp_midi = os.path.join(CACHE_DIR, f"__tmp_{cache_key}.mid")
+                    try:
+                        mid.save(temp_midi)
+                        score = music21.converter.parse(temp_midi)
+                        if hash in songs_db:
+                            score.metadata.title = os.path.splitext(
+                                songs_db[hash]["name"]
+                            )[0]
+                        score.write("musicxml", fp=mxl_path)
+                    finally:
+                        if os.path.exists(temp_midi):
+                            os.remove(temp_midi)
+                else:
+                    score = music21.converter.parse(file_path)
+                    if semitones != 0:
+                        score.transpose(semitones, inPlace=True)
+                    if bpm > 0:
+                        for el in score.flat.getElementsByClass(
+                            music21.tempo.MetronomeMark
+                        ):
+                            el.number = bpm
+                        if not list(
+                            score.flat.getElementsByClass(music21.tempo.MetronomeMark)
+                        ):
+                            score.insert(0, music21.tempo.MetronomeMark(number=bpm))
+                    if hash in songs_db:
+                        score.metadata.title = os.path.splitext(songs_db[hash]["name"])[
+                            0
+                        ]
+                    score.write("musicxml", fp=mxl_path)
+            finally:
+                _release_cache(cache_key)
+        xml_name = os.path.splitext(song["name"])[0] + ".mxl"
+        filename = xml_name.encode("utf-8").decode("latin1")
+        return FileResponse(
+            mxl_path,
+            media_type="application/vnd.recordare.musicxml+xml",
+            filename=filename,
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
     if raw and raw.lower() == "true":
         filename = song["name"].encode("utf-8").decode("latin1")
         media_type = (
