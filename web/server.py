@@ -82,17 +82,17 @@ _processing = {}
 
 
 def _claim_cache(cache_key, cache_path):
-    if os.path.exists(cache_path):
-        return False
-    with _processing_lock:
-        if cache_key in _processing:
-            _processing[cache_key].wait()
+    while True:
+        if os.path.exists(cache_path):
             return False
-        _processing[cache_key] = threading.Event()
-    if os.path.exists(cache_path):
-        _release_cache(cache_key)
-        return False
-    return True
+        with _processing_lock:
+            if os.path.exists(cache_path):
+                return False
+            ev = _processing.get(cache_key)
+            if ev is None:
+                _processing[cache_key] = threading.Event()
+                return True
+        ev.wait()
 
 
 def _release_cache(cache_key):
@@ -382,8 +382,8 @@ def download_file(hash: str, semitones: int = Query(0), bpm: int = Query(0, ge=0
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found on server.")
     if semitones != 0 or bpm > 0:
-        cache_key = f"{hash}_t{semitones}_b{bpm}"
-        midi_path = os.path.join(CACHE_DIR, cache_key + ".mid")
+        cache_key = f"{hash}_t{semitones}_b{bpm}.mid"
+        midi_path = os.path.join(CACHE_DIR, cache_key)
         if _claim_cache(cache_key, midi_path):
             try:
                 if song.get("file_type") == "midi":
@@ -413,13 +413,13 @@ def download_file(hash: str, semitones: int = Query(0), bpm: int = Query(0, ge=0
                     if semitones != 0:
                         score.transpose(semitones, inPlace=True)
                     if bpm > 0:
-                        for el in score.flat.getElementsByClass(
-                            music21.tempo.MetronomeMark
-                        ):
+                        flat_score = score.flatten()
+                        marks = list(
+                            flat_score.getElementsByClass(music21.tempo.MetronomeMark)
+                        )
+                        for el in marks:
                             el.number = bpm
-                        if not list(
-                            score.flat.getElementsByClass(music21.tempo.MetronomeMark)
-                        ):
+                        if not marks:
                             score.insert(0, music21.tempo.MetronomeMark(number=bpm))
                     score.write("midi", fp=midi_path)
             finally:
@@ -466,8 +466,8 @@ def download_xml_file(
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found on server.")
     if semitones != 0 or bpm > 0:
-        cache_key = f"{hash}_t{semitones}_b{bpm}"
-        mxl_path = os.path.join(CACHE_DIR, cache_key + ".mxl")
+        cache_key = f"{hash}_t{semitones}_b{bpm}.mxl"
+        mxl_path = os.path.join(CACHE_DIR, cache_key)
         if _claim_cache(cache_key, mxl_path):
             try:
                 if song.get("file_type") == "midi":
@@ -491,7 +491,7 @@ def download_xml_file(
                             mid.tracks[0].insert(
                                 0, mido.MetaMessage("set_tempo", tempo=new_tempo)
                             )
-                    temp_midi = os.path.join(CACHE_DIR, f"__tmp_{cache_key}.mid")
+                    temp_midi = os.path.join(CACHE_DIR, f"__tmp_{hash}_t{semitones}_b{bpm}.mid")
                     try:
                         mid.save(temp_midi)
                         score = music21.converter.parse(temp_midi)
@@ -508,13 +508,13 @@ def download_xml_file(
                     if semitones != 0:
                         score.transpose(semitones, inPlace=True)
                     if bpm > 0:
-                        for el in score.flat.getElementsByClass(
-                            music21.tempo.MetronomeMark
-                        ):
+                        flat_score = score.flatten()
+                        marks = list(
+                            flat_score.getElementsByClass(music21.tempo.MetronomeMark)
+                        )
+                        for el in marks:
                             el.number = bpm
-                        if not list(
-                            score.flat.getElementsByClass(music21.tempo.MetronomeMark)
-                        ):
+                        if not marks:
                             score.insert(0, music21.tempo.MetronomeMark(number=bpm))
                     if hash in songs_db:
                         score.metadata.title = os.path.splitext(songs_db[hash]["name"])[
