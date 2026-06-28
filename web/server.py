@@ -174,6 +174,9 @@ def _convert_midi_to_xml(midi_path: str, file_hash: str) -> Optional[str]:
     if os.path.exists(xml_path):
         return xml_path
     score = music21.converter.parse(midi_path)
+    if file_hash in songs_db:
+        song_name = os.path.splitext(songs_db[file_hash]["name"])[0]
+        score.metadata.title = song_name
     score.write("musicxml", fp=xml_path)
     return xml_path
 
@@ -270,11 +273,28 @@ def search_songs(name: str):
             ]
             return {"message": "Random song", "results": results}
     results = fuzzy_search(name, songs_db)
+    uploader_matches = []
+    for song in songs_db.values():
+        if song.get("upload_by", "") == name:
+            uploader_matches.append(
+                {
+                    **{k: v for k, v in song.items() if k != "delete_password"},
+                    "match_type": "uploader",
+                }
+            )
+    if uploader_matches:
+        seen_hashes = {r["hash"] for r in results}
+        for r in uploader_matches:
+            if r["hash"] not in seen_hashes:
+                results.append(r)
     if not results:
         return JSONResponse(
             content={"message": "No songs found", "results": []}, status_code=200
         )
-    return {"message": f"Found {len(results)} songs", "results": results}
+    msg = f"Found {len(results)} songs"
+    if uploader_matches:
+        msg += f" (including {len(uploader_matches)} by '{name}')"
+    return {"message": msg, "results": results}
 
 
 @app.post("/add_comment")
