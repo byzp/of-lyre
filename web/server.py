@@ -4,6 +4,7 @@ import json
 import logging
 import logging.config
 import os
+import copy
 import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -204,6 +205,36 @@ def _convert_midi_to_xml(midi_path: str, file_hash: str) -> Optional[str]:
     return xml_path
 
 
+def _strip_notes(part):
+    from music21 import note as m21_note, chord as m21_chord
+
+    for el in list(
+        part.recurse().getElementsByClass(
+            (m21_note.Note, m21_note.Rest, m21_chord.Chord),
+        )
+    ):
+        el.activeSite.remove(el)
+
+
+def _filter_score_by_track(score, track: int):
+    if track < 0:
+        return score
+    parts = list(score.parts)
+    if track >= len(parts):
+        return score
+
+    new_score = music21.stream.Score()
+    if score.metadata is not None:
+        new_score.metadata = score.metadata
+    for i, p in enumerate(parts):
+        cloned = copy.deepcopy(p)
+        new_score.insert(0, cloned)
+        if i != track:
+            _strip_notes(cloned)
+
+    return new_score
+
+
 def _calc_xml_duration_bg(file_hash: str, score):
     midi_path = os.path.join(CACHE_DIR, file_hash + ".mid")
     try:
@@ -374,23 +405,28 @@ async def delete_comment(
 
 
 @app.get("/download")
-def download_file(hash: str, semitones: int = Query(0), bpm: int = Query(0, ge=0)):
+def download_file(
+    hash: str,
+    semitones: int = Query(0),
+    bpm: int = Query(0, ge=0),
+    track: int = Query(-1),
+):
     if hash not in songs_db:
         raise HTTPException(status_code=404, detail="Music not found.")
     song = songs_db[hash]
     file_path = os.path.join("uploads", song["name"])
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found on server.")
-    if semitones != 0 or bpm > 0:
-        cache_key = f"{hash}_t{semitones}_b{bpm}.mid"
+    if semitones != 0 or bpm > 0 or track >= 0:
+        cache_key = f"{hash}_t{semitones}_b{bpm}_p{track}.mid"
         midi_path = os.path.join(CACHE_DIR, cache_key)
         if _claim_cache(cache_key, midi_path):
             try:
-                if song.get("file_type") == "midi":
+                if song.get("file_type") == "midi" and track < 0:
                     mid = mido.MidiFile(file_path)
                     if semitones != 0:
-                        for track in mid.tracks:
-                            for msg in track:
+                        for track_ in mid.tracks:
+                            for msg in track_:
                                 if msg.type in ("note_on", "note_off") and hasattr(
                                     msg, "note"
                                 ):
@@ -398,8 +434,8 @@ def download_file(hash: str, semitones: int = Query(0), bpm: int = Query(0, ge=0
                     if bpm > 0:
                         new_tempo = mido.bpm2tempo(bpm)
                         found = False
-                        for track in mid.tracks:
-                            for msg in track:
+                        for track_ in mid.tracks:
+                            for msg in track_:
                                 if msg.type == "set_tempo":
                                     msg.tempo = new_tempo
                                     found = True
@@ -421,6 +457,7 @@ def download_file(hash: str, semitones: int = Query(0), bpm: int = Query(0, ge=0
                             el.number = bpm
                         if not marks:
                             score.insert(0, music21.tempo.MetronomeMark(number=bpm))
+                    score = _filter_score_by_track(score, track)
                     score.write("midi", fp=midi_path)
             finally:
                 _release_cache(cache_key)
@@ -458,6 +495,7 @@ def download_xml_file(
     raw: Optional[str] = Query(None),
     semitones: int = Query(0),
     bpm: int = Query(0, ge=0),
+    track: int = Query(-1),
 ):
     if hash not in songs_db:
         raise HTTPException(status_code=404, detail="Music not found.")
@@ -465,16 +503,16 @@ def download_xml_file(
     file_path = os.path.join("uploads", song["name"])
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found on server.")
-    if semitones != 0 or bpm > 0:
-        cache_key = f"{hash}_t{semitones}_b{bpm}.mxl"
+    if semitones != 0 or bpm > 0 or track >= 0:
+        cache_key = f"{hash}_t{semitones}_b{bpm}_p{track}.mxl"
         mxl_path = os.path.join(CACHE_DIR, cache_key)
         if _claim_cache(cache_key, mxl_path):
             try:
                 if song.get("file_type") == "midi":
                     mid = mido.MidiFile(file_path)
                     if semitones != 0:
-                        for track in mid.tracks:
-                            for msg in track:
+                        for track_ in mid.tracks:
+                            for msg in track_:
                                 if msg.type in ("note_on", "note_off") and hasattr(
                                     msg, "note"
                                 ):
@@ -482,8 +520,8 @@ def download_xml_file(
                     if bpm > 0:
                         new_tempo = mido.bpm2tempo(bpm)
                         found = False
-                        for track in mid.tracks:
-                            for msg in track:
+                        for track_ in mid.tracks:
+                            for msg in track_:
                                 if msg.type == "set_tempo":
                                     msg.tempo = new_tempo
                                     found = True
@@ -491,7 +529,9 @@ def download_xml_file(
                             mid.tracks[0].insert(
                                 0, mido.MetaMessage("set_tempo", tempo=new_tempo)
                             )
-                    temp_midi = os.path.join(CACHE_DIR, f"__tmp_{hash}_t{semitones}_b{bpm}.mid")
+                    temp_midi = os.path.join(
+                        CACHE_DIR, f"__tmp_{hash}_t{semitones}_b{bpm}_p{track}.mid"
+                    )
                     try:
                         mid.save(temp_midi)
                         score = music21.converter.parse(temp_midi)
@@ -499,6 +539,7 @@ def download_xml_file(
                             score.metadata.title = os.path.splitext(
                                 songs_db[hash]["name"]
                             )[0]
+                        score = _filter_score_by_track(score, track)
                         score.write("musicxml", fp=mxl_path)
                     finally:
                         if os.path.exists(temp_midi):
@@ -520,6 +561,7 @@ def download_xml_file(
                         score.metadata.title = os.path.splitext(songs_db[hash]["name"])[
                             0
                         ]
+                    score = _filter_score_by_track(score, track)
                     score.write("musicxml", fp=mxl_path)
             finally:
                 _release_cache(cache_key)
